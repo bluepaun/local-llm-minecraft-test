@@ -323,7 +323,7 @@
   "num": "031",
   "path": "games/031-gpt-fable/index.html",
   "title": "Minecraft Clone (single HTML file)",
-  "label": "gpt-fable",
+  "label": "Qwen3.6-27B · gpt-fable 증류",
   "size": 5251,
   "date": "2026-11-18",
   "single": true,
