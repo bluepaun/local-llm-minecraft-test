@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BlockCraft HTML</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="menu" class="overlay visible">
+      <div class="panel">
+        <p class="eyebrow">HTML + Three.js</p>
+        <h1>BlockCraft</h1>
+        <p class="subtitle">A standalone Minecraft-inspired browser sandbox with terrain, mining, building, saving, gravity, collision, and flying.</p>
+        <div class="controls-grid">
+          <div><span>Move</span><strong>W A S D</strong></div>
+          <div><span>Jump</span><strong>Space</strong></div>
+          <div><span>Sprint</span><strong>Shift</strong></div>
+          <div><span>Look</span><strong>Mouse</strong></div>
+          <div><span>Break</span><strong>Left Click</strong></div>
+          <div><span>Place</span><strong>Right Click</strong></div>
+          <div><span>Hotbar</span><strong>1-6 / Wheel</strong></div>
+          <div><span>Fly</span><strong>F</strong></div>
+          <div><span>Respawn</span><strong>R</strong></div>
+          <div><span>Pause</span><strong>Esc</strong></div>
+        </div>
+        <div class="menu-actions">
+          <button id="startButton" type="button">Play</button>
+          <button id="loadButton" type="button">Load Save</button>
+          <button id="newWorldButton" type="button">New World</button>
+        </div>
+        <p id="menuHint" class="hint">Click Play to lock the pointer and start exploring.</p>
+      </div>
+    </div>
+
+    <div id="hud">
+      <div id="statusBar">
+        <div id="statusText">Generating world...</div>
+        <div id="buttonRow">
+          <button id="saveButton" type="button">Save</button>
+          <button id="respawnButton" type="button">Respawn</button>
+        </div>
+      </div>
+
+      <div id="message"></div>
+      <div id="crosshair" aria-hidden="true"></div>
+      <div id="hotbar"></div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+  </body>
+</html>

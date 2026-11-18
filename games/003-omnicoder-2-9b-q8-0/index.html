@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Clone</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: white;
+        }
+        #crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+            top: 0;
+        }
+        #crosshair::after {
+            width: 20px;
+            height: 2px;
+            left: 0;
+            top: 9px;
+        }
+        #instructions {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        #hotbar {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        .slot {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #555;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .slot.active {
+            border-color: white;
+        }
+        .slot:hover {
+            border-color: #aaa;
+        }
+        #block-selector {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        .block-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #555;
+            cursor: pointer;
+        }
+        .block-btn.active {
+            border-color: white;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="crosshair"></div>
+       <div id="instructions">
+            <h3>Controls</h3>
+            <p><b>W,A,S,D</b> - Move</p>
+            <p><b>Space</b> - Jump</p>
+            <p><b>Left Click</b> - Mine block</p>
+            <p><b>Right Click</b> - Place block</p>
+            <p><b>1-4</b> - Select block</p>
+            <p>Click to capture</p>
+        </div>
+    <div id="block-selector">
+        <div class="block-btn active" data-block="grass" style="background: linear-gradient(rgba(0,0,0,0),rgba(100,140,50,0.8));"></div>
+        <div class="block-btn" data-block="dirt" style="background: linear-gradient(rgba(0,0,0,0),rgba(101,67,33,0.8));"></div>
+        <div class="block-btn" data-block="stone" style="background: linear-gradient(rgba(0,0,0,0),rgba(124,124,124,0.8));"></div>
+        <div class="block-btn" data-block="wood" style="background: linear-gradient(rgba(0,0,0,0),rgba(101,67,33,0.9));"></div>
+    </div>
+    <div id="hotbar">
+        <div class="slot active" data-slot="1"></div>
+        <div class="slot" data-slot="2"></div>
+        <div class="slot" data-slot="3"></div>
+        <div class="slot" data-slot="4"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game state
+        let camera, scene, renderer;
+        let blocks = [];
+        let raycaster;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let canJump = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let selectedBlock = 'grass';
+        let currentSlot = 1;
+        let prevTime = performance.now();
+        let rollAngle = 0;
+
+        // Block types
+        const blockTypes = {
+            grass: { color: 0x55aa55, sideColor: 0x8B4513 },
+            dirt: { color: 0x8B4513, sideColor: 0x5C4033 },
+            stone: { color: 0x808080, sideColor: 0x696969 },
+            wood: { color: 0x8B4513, sideColor: 0x5C4033 }
+        };
+
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 10, 60);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 10, 0);
+            camera.rotation.order = 'YXZ';
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 100, 50);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+
+            // Generate world
+            generateWorld();
+
+            // Event listeners
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseClick);
+            window.addEventListener('resize', onWindowResize);
+
+            // Block selector
+            document.querySelectorAll('.block-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.block-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedBlock = btn.dataset.block;
+                });
+            });
+
+            // Hotbar
+            document.querySelectorAll('.slot').forEach(slot => {
+                slot.addEventListener('click', () => {
+                    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
+                    slot.classList.add('active');
+                    currentSlot = parseInt(slot.dataset.slot);
+                });
+            });
+
+            // Start game loop
+            animate();
+        }
+
+        function generateWorld() {
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+            // Generate terrain
+            for (let x = -10; x <= 10; x++) {
+                for (let z = -10; z <= 10; z++) {
+                    // Ground level
+                    const height = Math.floor(Math.sin(x * 0.3) * 2 + Math.cos(z * 0.3) * 2);
+                    
+                    // Dirt
+                    const dirtGeometry = new THREE.BoxGeometry(1, 1, 1);
+                    const dirtMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+                    const dirt = new THREE.Mesh(dirtGeometry, dirtMaterial);
+                    dirt.position.set(x, height - 1, z);
+                    dirt.castShadow = true;
+                    dirt.receiveShadow = true;
+                    scene.add(dirt);
+                    blocks.push(dirt);
+
+                    // Grass on top
+                    if (height > -5) {
+                        const grassGeometry = new THREE.BoxGeometry(1, 1, 1);
+                        const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x55aa55 });
+                        const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+                        grass.position.set(x, height, z);
+                        grass.castShadow = true;
+                        grass.receiveShadow = true;
+                        scene.add(grass);
+                        blocks.push(grass);
+
+                        // Stone below
+                        const stoneGeometry = new THREE.BoxGeometry(1, 1, 1);
+                        const stoneMaterial = new THREE.MeshLambertMaterial({ color: 0x808080 });
+                        const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+                        stone.position.set(x, height - 2, z);
+                        stone.castShadow = true;
+                        stone.receiveShadow = true;
+                        scene.add(stone);
+                        blocks.push(stone);
+                    }
+                }
+            }
+
+            // Trees
+            for (let i = 0; i < 10; i++) {
+                const treeX = Math.floor(Math.random() * 20) - 10;
+                const treeZ = Math.floor(Math.random() * 20) - 10;
+                createTree(treeX, 3, treeZ);
+            }
+        }
+
+        function createTree(x, y, z) {
+            const trunkGeometry = new THREE.BoxGeometry(0.8, 3, 0.8);
+            const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            for (let i = 0; i < 3; i++) {
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.set(x, y + i, z);
+                trunk.castShadow = true;
+                scene.add(trunk);
+                blocks.push(trunk);
+            }
+
+            const leavesGeometry = new THREE.BoxGeometry(2, 2, 2);
+            const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves.position.set(x, y + 4, z);
+            leaves.castShadow = true;
+            scene.add(leaves);
+            blocks.push(leaves);
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': 
+                    if (canJump) {
+                        velocity.y += 12;
+                        canJump = false;
+                    }
+                    break;
+                case 'Digit1': selectSlot(1); break;
+                case 'Digit2': selectSlot(2); break;
+                case 'Digit3': selectSlot(3); break;
+                case 'Digit4': selectSlot(4); break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        }
+
+        function selectSlot(slot) {
+            currentSlot = slot;
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.slot[data-slot="${slot}"]`).classList.add('active');
+        }
+
+        function onMouseClick(event) {
+            if (event.target.closest('#instructions') || event.target.closest('#block-selector') || event.target.closest('#hotbar')) {
+                return;
+            }
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(blocks, false);
+
+            if (intersects.length > 0 && intersects[0].distance < 6) {
+                const intersect = intersects[0];
+                
+                // Left click - mine block
+                if (event.button === 0) {
+                    scene.remove(intersect.object);
+                    blocks = blocks.filter(b => b !== intersect.object);
+                }
+                
+                // Right click - place block
+                if (event.button === 2) {
+                    const normal = intersect.face.normal;
+                    const position = intersect.object.position.clone().add(normal);
+                    
+                    // Don't place block inside player
+                    const playerPos = camera.position.clone();
+                    playerPos.y -= 1.6;
+                    if (position.distanceTo(playerPos) < 1.5) {
+                        return;
+                    }
+
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const material = new THREE.MeshLambertMaterial({ color: blockTypes[selectedBlock].color });
+                    const newBlock = new THREE.Mesh(geometry, material);
+                    newBlock.position.copy(position);
+                    newBlock.castShadow = true;
+                    newBlock.receiveShadow = true;
+                    scene.add(newBlock);
+                    blocks.push(newBlock);
+                }
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function checkCollision(newPosition) {
+            // Simple collision detection
+            const playerRadius = 0.3;
+            const playerHeight = 1.6;
+            
+            for (const block of blocks) {
+                const dx = Math.abs(newPosition.x - block.position.x);
+                const dz = Math.abs(newPosition.z - block.position.z);
+                const dy = newPosition.y - block.position.y;
+                
+                if (dx < 1 && dz < 1 && dy < 2 && dy > -1) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
+
+            // Apply velocity
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            velocity.y -= 30.0 * delta; // Gravity
+
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta;
+
+            // Move camera
+            const oldPosition = camera.position.clone();
+            
+            camera.translateX(-velocity.x * delta);
+            camera.translateZ(-velocity.z * delta);
+            camera.position.y += velocity.y * delta;
+
+            // Ground collision
+            if (camera.position.y < 2) {
+                velocity.y = 0;
+                camera.position.y = 2;
+                canJump = true;
+            }
+
+            // Simple player collision
+            const playerPos = camera.position.clone();
+            playerPos.y -= 1.6;
+            if (checkCollision(playerPos)) {
+                camera.position.y = oldPosition.y;
+                velocity.y = 0;
+            }
+
+            // Bobbing effect
+            rollAngle += 0.02;
+            camera.position.x += Math.sin(rollAngle) * 0.01;
+            camera.position.z += Math.cos(rollAngle) * 0.01;
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>

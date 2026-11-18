@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft in HTML</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            background: #87CEEB;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+        }
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        #crosshair::before {
+            top: 9px;
+            left: 0;
+            width: 20px;
+            height: 2px;
+        }
+        #crosshair::after {
+            top: 0;
+            left: 9px;
+            width: 2px;
+            height: 20px;
+        }
+        #inventory {
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            gap: 10px;
+        }
+        .slot {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            text-align: center;
+            transition: transform 0.1s;
+        }
+        .slot.active {
+            border-color: #ffff00;
+            transform: scale(1.1);
+        }
+        #block-1.active { background: #5D4037; }
+        #block-2.active { background: #388E3C; }
+        #block-3.active { background: #8D6E63; }
+        #block-4.active { background: #757575; }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        #instructions h1 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        #instructions p {
+            margin: 5px 0;
+        }
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div id="debug">
+                FPS: <span id="fps">0</span><br>
+                Blocks: <span id="blockCount">0</span>
+            </div>
+            <div id="crosshair"></div>
+            <div id="inventory">
+                <div class="slot active" id="block-1" data-type="dirt">1. Dirt</div>
+                <div class="slot" id="block-2" data-type="grass">2. Grass</div>
+                <div class="slot" id="block-3" data-type="stone">3. Stone</div>
+                <div class="slot" id="block-4" data-type="wood">4. Wood</div>
+            </div>
+        </div>
+        <div id="instructions">
+            <h1>Click to Play</h1>
+            <p>W, A, S, D - Move</p>
+            <p>SPACE - Jump</p>
+            <p>MOUSE - Look around</p>
+            <p>LEFT CLICK - Break block</p>
+            <p>RIGHT CLICK - Place block</p>
+            <p>1-4 - Select block type</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const instructions = document.getElementById('instructions');
+        const fpsDisplay = document.getElementById('fps');
+        const blockCountDisplay = document.getElementById('blockCount');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const WORLD_SIZE = 20;
+        const BLOCK_SIZE = 40;
+        
+        let blocks = {};
+        let selectedBlockType = 'dirt';
+
+        const blockTypes = {
+            dirt: { color: '#5D4037', name: 'Dirt' },
+            grass: { color: '#388E3C', name: 'Grass' },
+            stone: { color: '#757575', name: 'Stone' },
+            wood: { color: '#8D6E63', name: 'Wood' }
+        };
+
+        const player = {
+            x: WORLD_SIZE * BLOCK_SIZE / 2,
+            y: WORLD_SIZE * BLOCK_SIZE / 2,
+            z: 100,
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            speed: 5,
+            jumpPower: 12,
+            gravity: 0.6,
+            onGround: false,
+            pitch: 0,
+            yaw: 0
+        };
+
+        const keys = {};
+        const mouse = { x: 0, y: 0, locked: false };
+
+        function initWorld() {
+            blocks = {};
+            for (let x = 0; x < WORLD_SIZE; x++) {
+                for (let z = 0; z < WORLD_SIZE; z++) {
+                    let y = 0;
+                    blocks[`${x},${y},${z}`] = { type: 'grass', x, y, z };
+                    
+                    if (Math.random() > 0.8) {
+                        blocks[`${x},${y + 1},${z}`] = { type: 'grass', x, y: y + 1, z };
+                    }
+                }
+            }
+        }
+
+        function createBlock(x, y, z, type) {
+            const key = `${x},${y},${z}`;
+            if (!blocks[key]) {
+                blocks[key] = { type, x, y, z };
+            }
+        }
+
+        function removeBlock(x, y, z) {
+            const key = `${x},${y},${z}`;
+            if (blocks[key]) {
+                delete blocks[key];
+            }
+        }
+
+        function getBlockAt(x, y, z) {
+            const key = `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
+            return blocks[key];
+        }
+
+        canvas.addEventListener('click', () => {
+            instructions.style.display = 'none';
+            canvas.requestPointerLock();
+            mouse.locked = true;
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            mouse.locked = document.pointerLockElement === canvas;
+            if (!mouse.locked) {
+                instructions.style.display = 'block';
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (mouse.locked) {
+                player.yaw += e.movementX * 0.002;
+                player.pitch -= e.movementY * 0.002;
+                player.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.pitch));
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key >= '1' && e.key <= '4') {
+                selectBlock(parseInt(e.key));
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!mouse.locked) return;
+            
+            const ray = getRayDirection();
+            const hit = raycast(player.x, player.y, player.z, ray);
+            
+            if (hit) {
+                if (e.button === 0) {
+                    removeBlock(hit.x, hit.y, hit.z);
+                } else if (e.button === 2) {
+                    createBlock(hit.x + hit.nx, hit.y + hit.ny, hit.z + hit.nz, selectedBlockType);
+                }
+            }
+        });
+
+        function selectBlock(number) {
+            document.querySelectorAll('.slot').forEach(slot => slot.classList.remove('active'));
+            const slot = document.getElementById(`block-${number}`);
+            if (slot) {
+                slot.classList.add('active');
+                selectedBlockType = slot.dataset.type;
+            }
+        }
+
+        function getRayDirection() {
+            const cosPitch = Math.cos(player.pitch);
+            return {
+                x: cosPitch * Math.sin(player.yaw),
+                y: -Math.sin(player.pitch),
+                z: cosPitch * Math.cos(player.yaw)
+            };
+        }
+
+        function raycast(x, y, z, dir) {
+            const step = 5;
+            const maxDistance = 200;
+            
+            for (let d = 0; d < maxDistance; d += step) {
+                const checkX = x + dir.x * d;
+                const checkY = y + dir.y * d;
+                const checkZ = z + dir.z * d;
+                
+                const blockX = Math.round(checkX / BLOCK_SIZE);
+                const blockY = Math.round(checkY / BLOCK_SIZE);
+                const blockZ = Math.round(checkZ / BLOCK_SIZE);
+                
+                if (getBlockAt(blockX, blockY, blockZ)) {
+                    const prevX = x + dir.x * (d - step);
+                    const prevY = y + dir.y * (d - step);
+                    const prevZ = z + dir.z * (d - step);
+                    
+                    return {
+                        x: blockX,
+                        y: blockY,
+                        z: blockZ,
+                        nx: Math.round(checkX - prevX),
+                        ny: Math.round(checkY - prevY),
+                        nz: Math.round(checkZ - prevZ)
+                    };
+                }
+            }
+            return null;
+        }
+
+        function updatePlayer() {
+            let dx = 0;
+            let dz = 0;
+            
+            if (keys['w']) {
+                dx += Math.sin(player.yaw);
+                dz += Math.cos(player.yaw);
+            }
+            if (keys['s']) {
+                dx -= Math.sin(player.yaw);
+                dz -= Math.cos(player.yaw);
+            }
+            if (keys['a']) {
+                dx -= Math.cos(player.yaw);
+                dz -= Math.sin(player.yaw);
+            }
+            if (keys['d']) {
+                dx += Math.cos(player.yaw);
+                dz += Math.sin(player.yaw);
+            }
+            
+            const magnitude = Math.sqrt(dx * dx + dz * dz);
+            if (magnitude > 0) {
+                dx = (dx / magnitude) * player.speed;
+                dz = (dz / magnitude) * player.speed;
+            }
+            
+            if (keys[' '] && player.onGround) {
+                player.vy = player.jumpPower;
+                player.onGround = false;
+            }
+            
+            player.vx = dx;
+            player.vz = dz;
+            player.vy -= player.gravity;
+            
+            const nextX = player.x + player.vx;
+            const nextY = player.y + player.vy;
+            const nextZ = player.z + player.vz;
+            
+            player.x = checkCollision(nextX, player.y, player.z, 'x');
+            player.z = checkCollision(player.x, player.y, nextZ, 'z');
+            player.y = checkCollision(player.x, nextY, player.z, 'y');
+            
+            player.onGround = player.vy < 0 && getBlockAt(player.x / BLOCK_SIZE, (player.y - 1) / BLOCK_SIZE, player.z / BLOCK_SIZE);
+            
+            player.vy = player.onGround ? 0 : player.vy;
+        }
+
+        function checkCollision(x, y, z, axis) {
+            const blockX = Math.round(x / BLOCK_SIZE);
+            const blockY = Math.round(y / BLOCK_SIZE);
+            const blockZ = Math.round(z / BLOCK_SIZE);
+            
+            if (getBlockAt(blockX, blockY, blockZ)) {
+                if (axis === 'x') return player.x;
+                if (axis === 'y') return player.onGround ? blockY * BLOCK_SIZE : player.y;
+                if (axis === 'z') return player.z;
+            }
+            return axis === 'x' ? x : axis === 'y' ? y : z;
+        }
+
+        function drawBlock(x, y, z, type) {
+            const color = blockTypes[type].color;
+            const px = (x - player.x / BLOCK_SIZE + WORLD_SIZE / 2) * BLOCK_SIZE;
+            const py = (y - player.y / BLOCK_SIZE + WORLD_SIZE / 2) * BLOCK_SIZE;
+            
+            const scale = BLOCK_SIZE;
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(px - scale / 2, py - scale / 2, scale, scale);
+            
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px - scale / 2, py - scale / 2, scale, scale);
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(px - scale / 2 + 5, py - scale / 2 + 5, scale - 10, scale - 10);
+        }
+
+        function render() {
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const sortedBlocks = Object.values(blocks).sort((a, b) => {
+                const distA = Math.sqrt((a.x - player.x / BLOCK_SIZE) ** 2 + (a.z - player.z / BLOCK_SIZE) ** 2);
+                const distB = Math.sqrt((b.x - player.x / BLOCK_SIZE) ** 2 + (b.z - player.z / BLOCK_SIZE) ** 2);
+                return distA - distB;
+            });
+            
+            sortedBlocks.forEach(block => {
+                drawBlock(block.x, block.y, block.z, block.type);
+            });
+            
+            ctx.fillStyle = '#000';
+            ctx.font = '16px Arial';
+            ctx.fillText(selectedBlockType.toUpperCase(), canvas.width / 2 - 40, canvas.height / 2 - 20);
+        }
+
+        let lastTime = 0;
+        let frameCount = 0;
+        let lastFpsTime = 0;
+
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            if (mouse.locked) {
+                updatePlayer();
+            }
+            
+            render();
+            
+            frameCount++;
+            if (timestamp - lastFpsTime >= 1000) {
+                fpsDisplay.textContent = frameCount;
+                blockCountDisplay.textContent = Object.keys(blocks).length;
+                frameCount = 0;
+                lastFpsTime = timestamp;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        initWorld();
+        requestAnimationFrame(gameLoop);
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

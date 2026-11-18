@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Minecraft Clone</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        #crosshair {
+            position: fixed; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+        #ui {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 10px;
+            background: rgba(0,0,0,0.5); padding: 10px;
+            border-radius: 5px; color: white;
+            z-index: 10;
+        }
+        .slot {
+            width: 40px; height: 40px; border: 2px solid #888;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .slot.active { border-color: white; background: rgba(255,255,255,0.2); }
+        #instructions {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); color: white;
+            padding: 20px; text-align: center;
+            border-radius: 10px; z-index: 20;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="ui">
+        <div class="slot active" data-block="1" style="background-color: #5d994d;"></div>
+        <div class="slot" data-block="2" style="background-color: #8B4513;"></div>
+        <div class="slot" data-block="3" style="background-color: #808080;"></div>
+        <div class="slot" data-block="4" style="background-color: #40e0d0;"></div>
+    </div>
+    <div id="instructions">
+        <h1>Minecraft HTML</h1>
+        <p>Click to Start</p>
+        <p>(W,A,S,D = Move | SPACE = Jump | Left Click = Break | Right Click = Place | 1-4 = Select Block)</p>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // Configuration
+        const BLOCK_SIZE = 1;
+        const WORLD_SIZE = 20;
+        const PLAYER_SPEED = 0.1;
+        const JUMP_FORCE = 0.15;
+        const GRAVITY = 0.005;
+
+        // State
+        let activeBlockType = 1;
+        const blockTypes = {
+            1: { color: 0x5d994d, name: 'Grass' },
+            2: { color: 0x8B4513, name: 'Dirt' },
+            3: { color: 0x808080, name: 'Stone' },
+            4: { color: 0x40e0d0, name: 'Diamond' },
+        };
+
+        // Three.js setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue
+        scene.fog = new THREE.Fog(0x87CEEB, 1, 50);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        const controls = new PointerLockControls(camera, document.body);
+        const instructions = document.getElementById('instructions');
+
+        instructions.addEventListener('click', () => controls.lock());
+        controls.addEventListener('lock', () => instructions.style.display = 'none');
+        controls.addEventListener('unlock', () => instructions.style.display = 'block');
+
+        // World data
+        const world = new Map();
+        const boxGeometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+
+        function getBlockKey(x, y, z) {
+            return `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
+        }
+
+        function createBlock(x, y, z, type) {
+            const material = new THREE.MeshLambertMaterial({ color: blockTypes[type].color });
+            const mesh = new THREE.Mesh(boxGeometry, material);
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+            world.set(getBlockKey(x, y, z), { mesh, type });
+        }
+
+        // Simple world generation
+        for (let x = -WORLD_SIZE/2; x < WORLD_SIZE/2; x++) {
+            for (let z = -WORLD_SIZE/2; z < WORLD_SIZE/2; z++) {
+                // Basic hill generation using sine waves
+                const height = Math.floor(Math.sin(x * 0.2) * 2 + Math.cos(z * 0.2) * 2 + 3);
+                for (let y = 0; y <= height; y++) {
+                    let type = 3; // Stone
+                    if (y === height) type = 1; // Grass
+                    else if (y > height - 3) type = 2; // Dirt
+                    createBlock(x, y, z, type);
+                }
+            }
+        }
+
+        camera.position.set(0, 10, 0);
+
+        // Input
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.key >= '1' && e.key <= '4') {
+                activeBlockType = parseInt(e.key);
+                updateUI();
+            }
+        });
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        function updateUI() {
+            document.querySelectorAll('.slot').forEach((slot, idx) => {
+                slot.classList.toggle('active', idx + 1 === activeBlockType);
+            });
+        }
+
+        // Interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(0, 0);
+
+        window.addEventListener('mousedown', (e) => {
+            if (!controls.isLocked) return;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                const pos = intersect.object.position;
+
+                if (e.button === 0) { // Left click: Break
+                    scene.remove(intersect.object);
+                    world.delete(getBlockKey(pos.x, pos.y, pos.z));
+                } else if (e.button === 2) { // Right click: Place
+                    const normal = intersect.face.normal;
+                    const newPos = {
+                        x: pos.x + normal.x,
+                        y: pos.y + normal.y,
+                        z: pos.z + normal.z
+                    };
+                    createBlock(newPos.x, newPos.y, newPos.z, activeBlockType);
+                }
+            }
+        });
+
+        // Disable right-click menu
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Physics & Game Loop
+        let velocityY = 0;
+        let canJump = false;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls.isLocked) {
+                // Movement
+                const direction = new THREE.Vector3();
+                const front = new THREE.Vector3();
+                const side = new THREE.Vector3();
+
+                camera.getWorldDirection(front);
+                front.y = 0;
+                front.normalize();
+                side.crossVectors(front, camera.up).normalize();
+
+                if (keys['KeyW']) camera.position.addScaledVector(front, PLAYER_SPEED);
+                if (keys['KeyS']) camera.position.addScaledVector(front, -PLAYER_SPEED);
+                if (keys['KeyA']) camera.position.addScaledVector(side, -PLAYER_SPEED);
+                if (keys['KeyD']) camera.position.addScaledVector(side, PLAYER_SPEED);
+
+                // Gravity & Jump
+                velocityY -= GRAVITY;
+                camera.position.y += velocityY;
+
+                // Basic Ground Collision
+                const px = Math.round(camera.position.x);
+                const py = Math.round(camera.position.y - 1.6); // Eye level adjustment
+                const pz = Math.round(camera.position.z);
+
+                if (world.has(getBlockKey(px, py, pz))) {
+                    camera.position.y = py + 1.6 + 0.5; // Snap to block top
+                    velocityY = 0;
+                    canJump = true;
+                } else {
+                    canJump = false;
+                }
+
+                if (keys['Space'] && canJump) {
+                    velocityY = JUMP_FORCE;
+                    canJump = false;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minecraft Clone</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb; font-family: monospace; }
+  #canvas { display: block; width: 100%; height: 100%; }
+
+  #crosshair {
+    position: fixed; top: 50%; left: 50%;
+    width: 20px; height: 20px; margin: -10px 0 0 -10px;
+    pointer-events: none; z-index: 10;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(255,255,255,0.85);
+    box-shadow: 0 0 2px rgba(0,0,0,0.6);
+  }
+  #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
+  #crosshair::after  { top: 9px; left: 0; height: 2px; width: 20px; }
+
+  #hotbar {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 4px; z-index: 10; padding: 4px;
+    background: rgba(0,0,0,0.25); border-radius: 6px;
+  }
+  .slot {
+    width: 48px; height: 48px; border: 2px solid rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 10px; text-align: center; border-radius: 4px;
+    background: rgba(0,0,0,0.3); position: relative;
+  }
+  .slot.active { border-color: #fff; background: rgba(255,255,255,0.2); }
+  .slot .swatch { width: 30px; height: 30px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.4); }
+  .slot .num { position: absolute; top: 1px; left: 3px; font-size: 9px; opacity: 0.7; }
+
+  #info {
+    position: fixed; top: 10px; left: 10px; z-index: 10; color: #fff;
+    text-shadow: 1px 1px 2px #000; font-size: 13px; line-height: 1.5;
+    pointer-events: none;
+  }
+
+  #overlay {
+    position: fixed; inset: 0; z-index: 20; display: flex;
+    align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(0,0,0,0.55); color: #fff; text-align: center; cursor: pointer;
+  }
+  #overlay h1 { font-size: 42px; margin-bottom: 12px; text-shadow: 2px 2px 4px #000; }
+  #overlay p { font-size: 15px; margin: 4px 0; opacity: 0.9; }
+  #overlay .start { margin-top: 22px; padding: 12px 26px; background: #5a8f3c;
+    border: 3px solid #3c6626; border-radius: 6px; font-size: 18px; }
+  #overlay.hidden { display: none; }
+
+  #err {
+    position: fixed; top: 0; left: 0; width: 100%; z-index: 30;
+    background: #b00; color: #fff; padding: 8px 12px; font-size: 13px;
+    display: none; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="crosshair"></div>
+<div id="info"></div>
+<div id="hotbar"></div>
+<div id="err"></div>
+
+<div id="overlay">
+  <h1>⛏️ Minecraft Clone</h1>
+  <p><b>WASD</b> — move &nbsp; <b>Space</b> — jump &nbsp; <b>Shift</b> — sprint</p>
+  <p><b>Mouse</b> — look &nbsp; <b>Left click</b> — break &nbsp; <b>Right click</b> — place</p>
+  <p><b>1–7 / Scroll</b> — select block &nbsp; <b>Esc</b> — release mouse</p>
+  <div class="start">Click to Play</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function showError(e) {
+    var el = document.getElementById('err');
+    el.style.display = 'block';
+    el.textContent = 'ERROR: ' + (e && (e.stack || e.message) ? (e.stack || e.message) : e);
+    console.error(e);
+  }
+
+  // ---------- Block definitions ----------
+  // RGB color per block per face (top, side, bottom)
+  const BLOCKS = [
+    { id: 1, name: 'Grass',  top: [0x86,0xc2,0x4f], side: [0x8a,0x6a,0x3a], bot: [0x7a,0x5a,0x2a] },
+    { id: 2, name: 'Dirt',   all: [0x7a,0x5a,0x2a] },
+    { id: 3, name: 'Stone',  all: [0x8a,0x8a,0x8a] },
+    { id: 4, name: 'Wood',   top: [0xb0,0x8a,0x45], side: [0x6b,0x4f,0x28], bot: [0xb0,0x8a,0x45] },
+    { id: 5, name: 'Leaves', all: [0x3f,0x8f,0x3a] },
+    { id: 6, name: 'Sand',   all: [0xe3,0xd5,0x9a] },
+    { id: 7, name: 'Water',  all: [0x3a,0x6f,0xb0] },
+  ];
+  const SELECTION = [1, 2, 3, 4, 5, 6]; // blocks available in hotbar
+  const selectionColors = {};
+  SELECTION.forEach(id => selectionColors[id] = blockColor(id));
+  function blockColor(id) {
+    var b = BLOCKS.find(function (x) { return x.id === id; });
+    return b.all || b.top;
+  }
+
+  // ---------- Renderer / Scene ----------
+  var canvas = document.getElementById('canvas');
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  } catch (e) { showError(e); }
+  if (!renderer) { document.getElementById('err').style.display='block'; document.getElementById('err').textContent='WebGL renderer could not be created. Your browser/GPU may not support WebGL.'; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
+
+  var camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 500);
+
+  var sun = new THREE.DirectionalLight(0xffffff, 0.95);
+  sun.position.set(30, 60, 20);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+  // ---------- World data ----------
+  const WORLD_HALF = 32;
+  const WATER_LEVEL = 6;
+  const world = new Map(); // "x,y,z" -> blockId
+  function key(x, y, z) { return x + ',' + y + ',' + z; }
+  function getBlock(x, y, z) { return world.get(key(x, y, z)); }
+  function setBlock(x, y, z, id) {
+    if (id === 0) world.delete(key(x, y, z));
+    else world.set(key(x, y, z), id);
+  }
+
+  // ---------- Simple value-noise heightmap ----------
+  function hash(x, z) {
+    var h = (x | 0) * 374761393 + (z | 0) * 668265263;
+    h = (h ^ (h >> 13)) >>> 0;
+    h = (h * 1274126177) >>> 0;
+    return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+  }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function valueNoise(x, z) {
+    var xi = Math.floor(x), zi = Math.floor(z);
+    var xf = x - xi, zf = z - zi;
+    var v00 = hash(xi, zi), v10 = hash(xi + 1, zi);
+    var v01 = hash(xi, zi + 1), v11 = hash(xi + 1, zi + 1);
+    var u = smooth(xf), v = smooth(zf);
+    return lerp(lerp(v00, v10, u), lerp(v01, v11, u), v);
+  }
+  function heightAt(x, z) {
+    var h = 0;
+    h += valueNoise(x * 0.05, z * 0.05) * 12;
+    h += valueNoise(x * 0.12, z * 0.12) * 5;
+    h += valueNoise(x * 0.25, z * 0.25) * 2;
+    return Math.floor(h + 6);
+  }
+
+  // ---------- Generate world ----------
+  function generateWorld() {
+    for (var x = -WORLD_HALF; x < WORLD_HALF; x++) {
+      for (var z = -WORLD_HALF; z < WORLD_HALF; z++) {
+        var h = heightAt(x, z);
+        for (var y = 0; y <= h; y++) {
+          var id;
+          if (y === h) id = (h <= WATER_LEVEL + 1) ? 6 : 1;
+          else if (y > h - 3) id = 2;
+          else id = 3;
+          setBlock(x, y, z, id);
+        }
+        for (var wy = h + 1; wy <= WATER_LEVEL; wy++) setBlock(x, wy, z, 7);
+
+        var surfaceH = heightAt(x, z);
+        if (surfaceH > WATER_LEVEL + 1 && hash(x * 7 + 1, z * 7 + 3) > 0.986) {
+          var th = 4 + (Math.floor(hash(x, z) * 3));
+          for (var t = 1; t <= th; t++) setBlock(x, surfaceH + t, z, 4);
+          var top = surfaceH + th;
+          for (var dx = -2; dx <= 2; dx++) {
+            for (var dz = -2; dz <= 2; dz++) {
+              for (var dy = 0; dy <= 2; dy++) {
+                if (Math.abs(dx) + Math.abs(dz) + dy <= 3 && !(dx === 0 && dz === 0 && dy === 0)) {
+                  if (!getBlock(x + dx, top + dy - 1, z + dz))
+                    setBlock(x + dx, top + dy - 1, z + dz, 5);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ---------- Mesh building: single vertex-colored geometry ----------
+  var faceDefs = [
+    { dir: [ 1, 0, 0], corners: [[1,1,1],[1,0,1],[1,0,0],[1,1,0]], face: 'side' },
+    { dir: [-1, 0, 0], corners: [[0,1,0],[0,0,0],[0,0,1],[0,1,1]], face: 'side' },
+    { dir: [ 0, 1, 0], corners: [[0,1,1],[1,1,1],[1,1,0],[0,1,0]], face: 'top' },
+    { dir: [ 0,-1, 0], corners: [[0,0,0],[1,0,0],[1,0,1],[0,0,1]], face: 'bot' },
+    { dir: [ 0, 0, 1], corners: [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], face: 'side' },
+    { dir: [ 0, 0,-1], corners: [[1,1,0],[1,0,0],[0,0,0],[0,1,0]], face: 'side' },
+  ];
+
+  function isSolid(x, y, z) {
+    var b = getBlock(x, y, z);
+    return b !== undefined && b !== 7;
+  }
+  // A face is drawn if the neighbour is not a solid opaque block.
+  function faceVisible(nx, ny, nz) {
+    var b = getBlock(nx, ny, nz);
+    if (b === undefined) return true;
+    if (b === 7) return true; // see through water
+    return false;
+  }
+
+  var worldMesh = null;
+  function buildWorldMesh() {
+    if (worldMesh) { scene.remove(worldMesh); worldMesh.geometry.dispose(); }
+    var positions = [];
+    var colors = [];
+    var normals = [];
+    var indices = [];
+
+    world.forEach(function (id, k) {
+      var p = k.split(',');
+      var x = +p[0], y = +p[1], z = +p[2];
+      var col = blockColor(id);
+      for (var f = 0; f < faceDefs.length; f++) {
+        var fd = faceDefs[f];
+        var nx = x + fd.dir[0], ny = y + fd.dir[1], nz = z + fd.dir[2];
+        if (isSolid(nx, ny, nz)) continue;
+        if (!faceVisible(nx, ny, nz)) continue;
+        var base = positions.length / 3;
+        for (var c = 0; c < 4; c++) {
+          var vtx = fd.corners[c];
+          positions.push(x + vtx[0], y + vtx[1], z + vtx[2]);
+          normals.push(fd.dir[0], fd.dir[1], fd.dir[2]);
+          // simple fake shading by face direction for depth
+          var shade = 1.0;
+          if (fd.face === 'top') shade = 1.0;
+          else if (fd.face === 'bot') shade = 0.55;
+          else if (fd.dir[0] !== 0) shade = 0.78;
+          else shade = 0.66;
+          colors.push(col[0] / 255 * shade, col[1] / 255 * shade, col[2] / 255 * shade);
+        }
+        indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      }
+    });
+
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setIndex(indices);
+
+    var mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    worldMesh = new THREE.Mesh(geo, mat);
+    scene.add(worldMesh);
+    return indices.length / 3;
+  }
+
+  // ---------- Player ----------
+  var player = {
+    pos: new THREE.Vector3(),
+    vel: new THREE.Vector3(),
+    onGround: false,
+    height: 1.6,
+    radius: 0.3,
+    yaw: 0,
+    pitch: 0,
+  };
+
+  function spawnPlayer() {
+    var h = heightAt(0, 0);
+    player.pos.set(0.5, Math.max(h, WATER_LEVEL) + 2.5, 0.5);
+    player.vel.set(0, 0, 0);
+    // keep the camera synced to the player even before the game is locked/running
+    syncCamera();
+  }
+
+  function collides(px, py, pz) {
+    var r = player.radius;
+    var minX = Math.floor(px - r), maxX = Math.floor(px + r);
+    var minY = Math.floor(py - player.height), maxY = Math.floor(py + 0.1);
+    var minZ = Math.floor(pz - r), maxZ = Math.floor(pz + r);
+    for (var x = minX; x <= maxX; x++)
+      for (var y = minY; y <= maxY; y++)
+        for (var z = minZ; z <= maxZ; z++) {
+          if (getBlock(x, y, z) !== undefined && getBlock(x, y, z) !== 7) return true;
+        }
+    return false;
+  }
+
+  function syncCamera() {
+    camera.position.set(player.pos.x, player.pos.y + 0.55, player.pos.z);
+    var look = new THREE.Vector3(
+      -Math.sin(player.yaw) * Math.cos(player.pitch),
+      Math.sin(player.pitch),
+      -Math.cos(player.yaw) * Math.cos(player.pitch)
+    );
+    camera.lookAt(camera.position.clone().add(look));
+  }
+
+  function tryMove(dx, dy, dz) {
+    if (!collides(player.pos.x + dx, player.pos.y, player.pos.z)) player.pos.x += dx;
+    if (!collides(player.pos.x, player.pos.y, player.pos.z + dz)) player.pos.z += dz;
+    if (!collides(player.pos.x, player.pos.y + dy, player.pos.z)) {
+      player.pos.y += dy; player.onGround = false;
+    } else {
+      if (dy < 0) player.onGround = true;
+      player.pos.y = Math.round(player.pos.y);
+    }
+  }
+
+  // ---------- Input ----------
+  var keys = {};
+  document.addEventListener('keydown', function (e) { keys[e.code] = true; });
+  document.addEventListener('keyup', function (e) { keys[e.code] = false; });
+
+  var overlay = document.getElementById('overlay');
+  var locked = false;
+  overlay.addEventListener('click', function () { canvas.requestPointerLock(); });
+  document.addEventListener('pointerlockchange', function () {
+    locked = document.pointerLockElement === canvas;
+    overlay.classList.toggle('hidden', locked);
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!locked) return;
+    player.yaw   -= e.movementX * 0.0025;
+    player.pitch -= e.movementY * 0.0025;
+    player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+  });
+
+  // Voxel raycast (DDA)
+  function raycastVoxel() {
+    var dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    var ox = camera.position.x, oy = camera.position.y, oz = camera.position.z;
+    var x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
+    var stepX = Math.sign(dir.x), stepY = Math.sign(dir.y), stepZ = Math.sign(dir.z);
+    var tDeltaX = stepX !== 0 ? Math.abs(1 / dir.x) : Infinity;
+    var tDeltaY = stepY !== 0 ? Math.abs(1 / dir.y) : Infinity;
+    var tDeltaZ = stepZ !== 0 ? Math.abs(1 / dir.z) : Infinity;
+    var tmaxX = stepX !== 0 ? tDeltaX * (stepX < 0 ? (Math.floor(ox) + 1 - ox) : (ox - Math.floor(ox))) : Infinity;
+    var tmaxY = stepY !== 0 ? tDeltaY * (stepY < 0 ? (Math.floor(oy) + 1 - oy) : (oy - Math.floor(oy))) : Infinity;
+    var tmaxZ = stepZ !== 0 ? tDeltaZ * (stepZ < 0 ? (Math.floor(oz) + 1 - oz) : (oz - Math.floor(oz))) : Infinity;
+    var normal = [0, 0, 0];
+    var dist = 0;
+    while (dist < 6) {
+      if (getBlock(x, y, z) !== undefined) return { x: x, y: y, z: z, normal: normal };
+      if (tmaxX < tmaxY) {
+        if (tmaxX < tmaxZ) { x += stepX; dist = tmaxX; tmaxX += tDeltaX; normal = [-stepX, 0, 0]; }
+        else { z += stepZ; dist = tmaxZ; tmaxZ += tDeltaZ; normal = [0, 0, -stepZ]; }
+      } else {
+        if (tmaxY < tmaxZ) { y += stepY; dist = tmaxY; tmaxY += tDeltaY; normal = [0, -stepY, 0]; }
+        else { z += stepZ; dist = tmaxZ; tmaxZ += tDeltaZ; normal = [0, 0, -stepZ]; }
+      }
+    }
+    return null;
+  }
+
+  var activeSlot = 0;
+  var rebuildScheduled = false;
+
+  document.addEventListener('mousedown', function (e) {
+    if (!locked) return;
+    var hit = raycastVoxel();
+    if (!hit) return;
+    if (e.button === 0) {
+      setBlock(hit.x, hit.y, hit.z, 0);
+      rebuildScheduled = true;
+    } else if (e.button === 2) {
+      var px = hit.normal[0], py = hit.normal[1], pz = hit.normal[2];
+      var nx = hit.x + px, ny = hit.y + py, nz = hit.z + pz;
+      var r = player.radius;
+      var overlaps = (nx >= Math.floor(player.pos.x - r) && nx <= Math.floor(player.pos.x + r) &&
+                      nz >= Math.floor(player.pos.z - r) && nz <= Math.floor(player.pos.z + r) &&
+                      ny >= Math.floor(player.pos.y - player.height) && ny <= Math.floor(player.pos.y + 0.2));
+      if (!overlaps && getBlock(nx, ny, nz) === undefined) {
+        setBlock(nx, ny, nz, SELECTION[activeSlot]);
+        rebuildScheduled = true;
+      }
+    }
+  });
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  document.addEventListener('wheel', function (e) {
+    if (!locked) return;
+    activeSlot = (activeSlot + (e.deltaY > 0 ? 1 : -1) + SELECTION.length) % SELECTION.length;
+    renderHotbar();
+  });
+  document.addEventListener('keydown', function (e) {
+    var n = parseInt(e.key, 10);
+    if (n >= 1 && n <= SELECTION.length) { activeSlot = n - 1; renderHotbar(); }
+  });
+
+  // ---------- Hotbar UI ----------
+  var hotbar = document.getElementById('hotbar');
+  function renderHotbar() {
+    hotbar.innerHTML = '';
+    SELECTION.forEach(function (id, i) {
+      var c = selectionColors[id];
+      var slot = document.createElement('div');
+      slot.className = 'slot' + (i === activeSlot ? ' active' : '');
+      slot.innerHTML = '<span class="num">' + (i + 1) + '</span><div class="swatch" style="background:rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')"></div>';
+      hotbar.appendChild(slot);
+    });
+  }
+
+  // ---------- Resize ----------
+  window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---------- Game loop ----------
+  var info = document.getElementById('info');
+  var last = performance.now();
+  var frames = 0, fpsAccum = 0, displayFps = 0;
+
+  function update(dt) {
+    var speed = (keys['ShiftLeft'] || keys['ShiftRight']) ? 8 : 4.5;
+    var forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    var right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    var dir = new THREE.Vector3();
+    if (keys['KeyW']) dir.add(forward);
+    if (keys['KeyS']) dir.sub(forward);
+    if (keys['KeyD']) dir.add(right);
+    if (keys['KeyA']) dir.sub(right);
+    if (dir.lengthSq() > 0) dir.normalize();
+
+    player.vel.x = dir.x * speed;
+    player.vel.z = dir.z * speed;
+    player.vel.y -= 22 * dt;
+
+    if (keys['Space'] && player.onGround) { player.vel.y = 8.2; player.onGround = false; }
+
+    tryMove(player.vel.x * dt, player.vel.y * dt, player.vel.z * dt);
+
+    if (player.pos.y < -20) { spawnPlayer(); }
+
+    syncCamera();
+  }
+
+  function loop(now) {
+    try {
+      var dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      if (locked) update(dt);
+      if (rebuildScheduled) { var t0 = performance.now(); var tris = buildWorldMesh(); rebuildScheduled = false; }
+      fpsAccum += dt; frames++;
+      if (fpsAccum >= 0.5) { displayFps = Math.round(frames / fpsAccum); frames = 0; fpsAccum = 0; }
+      info.innerHTML =
+        'FPS: ' + displayFps + '<br>' +
+        'Tris: ' + (worldMesh ? (tris ? (tris/1000).toFixed(1) + 'k' : '—') : '—') + '<br>' +
+        'XYZ: ' + player.pos.x.toFixed(1) + ', ' + player.pos.y.toFixed(1) + ', ' + player.pos.z.toFixed(1) + '<br>' +
+        (BLOCKS.find(function (b) { return b.id === SELECTION[activeSlot]; }).name || '');
+      renderer.render(scene, camera);
+    } catch (e) { showError(e); }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- Init (with guards) ----------
+  try {
+    generateWorld();
+    var tris = buildWorldMesh();
+    spawnPlayer();
+    renderHotbar();
+    // render one frame immediately so the world is visible behind the overlay
+    syncCamera();
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  } catch (e) { showError(e); }
+})();
+</script>
+</body>
+</html>

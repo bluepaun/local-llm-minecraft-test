@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minecraft &mdash; one file</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+  #c{display:block}
+  #cross{position:fixed;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;pointer-events:none;mix-blend-mode:difference;
+    background:linear-gradient(#fff,#fff) center/2px 16px no-repeat,linear-gradient(#fff,#fff) center/16px 2px no-repeat}
+  #hot{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:6px}
+  .slot{width:44px;height:44px;border:2px solid #ffffff55;border-radius:6px;background:#0007;position:relative}
+  .slot.on{border-color:#fff;box-shadow:0 0 0 2px #0008}
+  .slot i{position:absolute;inset:6px;border-radius:3px;display:block;box-shadow:inset -4px -4px 0 #0003,inset 4px 4px 0 #fff2}
+  .slot b{position:absolute;left:3px;top:1px;font:10px/1 monospace;color:#fffb}
+  #name{position:fixed;left:50%;bottom:66px;transform:translateX(-50%);color:#fff;text-shadow:0 1px 3px #000;font-size:14px;letter-spacing:.5px}
+  #help{position:fixed;left:10px;top:10px;color:#fffd;font:12px/1.55 ui-monospace,monospace;text-shadow:0 1px 2px #000;white-space:pre;pointer-events:none}
+  #start{position:fixed;inset:0;display:grid;place-items:center;color:#fff;background:#0006;font-size:20px;cursor:pointer;text-align:center;line-height:1.8}
+  #start small{display:block;font-size:12px;opacity:.7}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="start">CLICK TO PLAY<small>WASD move &middot; SHIFT sprint / fly down &middot; SPACE jump &middot; MOUSE look &middot; LMB break &middot; RMB place &middot; 1-0 / wheel block &middot; F fly &middot; ESC release</small></div>
+<div id="help"></div>
+<div id="name"></div>
+<div id="hot"></div>
+<div id="cross" class="hide"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
+
+/* ---------- world data ---------- */
+const WX = 128, WY = 48, WZ = 128, CS = 16, SEA = 17;
+const blocks = new Uint8Array(WX * WY * WZ);
+const idx = (x, y, z) => (y * WZ + z) * WX + x;
+const inB = (x, y, z) => x >= 0 && x < WX && z >= 0 && z < WZ && y >= 0 && y < WY;
+const get = (x, y, z) => inB(x, y, z) ? blocks[idx(x, y, z)] : (y < 0 ? 3 : 0);
+const set = (x, y, z, v) => { if (inB(x, y, z)) blocks[idx(x, y, z)] = v; };
+
+const opaque = v => v !== 0 && v !== 5 && v !== 9;   // solid + visually closed
+const solid = v => v !== 0 && v !== 5;                // blocks the player
+
+// tiles: [top, side, bottom]
+const BLOCKS = {
+  1: ['Grass', 0, 1, 2, '#6aa84f'], 2: ['Dirt', 2, 2, 2, '#8b5a2b'], 3: ['Stone', 3, 3, 3, '#8d8d8d'],
+  4: ['Sand', 4, 4, 4, '#e0d29a'], 5: ['Water', 5, 5, 5, '#3b6fd4'], 6: ['Log', 7, 6, 7, '#6b4a2a'],
+  7: ['Leaves', 8, 8, 8, '#3f7a2e'], 8: ['Snow', 11, 12, 2, '#f0f5f8'], 9: ['Glass', 9, 9, 9, '#cfeff5'],
+  10: ['Brick', 10, 10, 10, '#a4463a'],
+};
+const HOTBAR = [1, 2, 3, 4, 6, 7, 9, 10, 8, 5];
+
+const hash2 = (x, z) => { let h = Math.imul(x, 374761393) + Math.imul(z, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+const noise2 = (x, z) => {
+  const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf), s = (a, b) => hash2(xi + a, zi + b);
+  return (s(0, 0) * (1 - u) + s(1, 0) * u) * (1 - v) + (s(0, 1) * (1 - u) + s(1, 1) * u) * v;
+};
+const fbm = (x, z) => noise2(x / 42, z / 42) * .68 + noise2(x / 16, z / 16) * .32;
+
+/* ---------- terrain ---------- */
+const height = [];
+for (let z = 0; z < WZ; z++) for (let x = 0; x < WX; x++) {
+  const h = Math.max(1, Math.round(9 + fbm(x, z) * 24));
+  height[z * WX + x] = h;
+  for (let y = 0; y <= h; y++) {
+    let v = 3;
+    if (y === h) v = h <= SEA + 1 ? 4 : h >= 28 ? 8 : 1;
+    else if (y > h - 4) v = h <= SEA + 1 ? 4 : 2;
+    set(x, y, z, v);
+  }
+  for (let y = h + 1; y <= SEA; y++) set(x, y, z, 5);
+}
+for (let z = 3; z < WZ - 3; z++) for (let x = 3; x < WX - 3; x++) {
+  const h = height[z * WX + x];
+  if (h <= SEA + 1 || h >= 28 || hash2(x * 7 + 11, z * 13 + 5) < .988) continue;
+  const th = 4 + Math.floor(hash2(x, z) * 3), top = h + th;
+  for (let y = h + 1; y <= top; y++) set(x, y, z, 6);
+  for (let dy = -2; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+    const r = Math.abs(dx) + Math.abs(dz) + Math.abs(dy);
+    if (r > 3 || (dy === 1 && r > 1) || get(x + dx, top + dy, z + dz)) continue;
+    set(x + dx, top + dy, z + dz, 7);
+  }
+}
+
+/* ---------- texture atlas (16 tiles, 16px each) ---------- */
+const atlas = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;   // 4x4 grid of 16px tiles
+  const g = c.getContext('2d');
+  const T = i => [(i % 4) * 16, ((i / 4) | 0) * 16];
+  const px = (i, x, y, col) => { g.fillStyle = col; g.fillRect(T(i)[0] + x, T(i)[1] + y, 1, 1); };
+  const hx = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const mix = (a, b, t) => `rgb(${hx(a).map((v, k) => Math.round(v + (hx(b)[k] - v) * t)).join(',')})`;
+  const grain = (i, base, dark, d = .3) => {              // speckle the whole 16x16 tile, not one row
+    g.fillStyle = base; g.fillRect(...T(i), 16, 16);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (hash2(i * 99 + x * 7, y * 31 + 5) < d) px(i, x, y, mix(base, dark, hash2(x * 13, y * 17) * .9));
+  };
+  grain(0, '#6aa84f', '#3f7a2e'); grain(2, '#8b5a2b', '#5d3a17');
+  grain(1, '#8b5a2b', '#5d3a17'); for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) if (hash2(x, y * 7) > .35) px(1, x, y, mix('#6aa84f', '#3f7a2e', hash2(x * 3, y)));
+  grain(3, '#8d8d8d', '#5f5f5f', .4); grain(4, '#e0d29a', '#c2ad70');
+  grain(5, '#3b6fd4', '#2a55a8'); grain(11, '#f2f7fa', '#cddbe6', .2);
+  grain(12, '#8b5a2b', '#5d3a17'); for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) px(12, x, y, mix('#f2f7fa', '#cddbe6', hash2(x * 5, y * 3)));
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {      // logs: vertical streaks
+    const s = hash2(x * 17, y); px(6, x, y, mix('#7a5832', '#4a321a', (x % 4 === 0 ? .8 : s * .5)));
+    px(7, x, y, mix('#a07a4e', '#6e5232', s));
+  }
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {      // leaves
+    const s = hash2(x * 13, y * 7); px(8, x, y, mix('#468432', '#22521a', s));
+  }
+  const [gx, gy] = T(9), [bx, by] = T(10);                            // glass + brick
+  g.fillStyle = '#a9dfe8'; g.fillRect(gx, gy, 16, 16);
+  g.globalAlpha = .18; g.fillStyle = '#fff'; g.fillRect(gx, gy, 16, 16); g.globalAlpha = 1;
+  g.strokeStyle = '#e9fbff'; g.lineWidth = 1; g.strokeRect(gx + .5, gy + .5, 15, 15);
+  g.beginPath(); g.moveTo(gx + 3, gy + 13); g.lineTo(gx + 12, gy + 3); g.moveTo(gx + 7, gy + 13); g.lineTo(gx + 13, gy + 7); g.stroke();
+  g.fillStyle = '#a4463a'; g.fillRect(bx, by, 16, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (y % 4 !== 3 && !((x + ((y / 4) | 0) * 8) % 16 === 15 || (x + ((y / 4) | 0) * 8) % 16 === 0)) px(10, x, y, mix('#a4463a', '#783026', hash2(x * 11, y * 5)));
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+
+/* ---------- renderer ---------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const SKY = 0x9ad7ff, WATER = 0x2b5f9e;
+scene.fog = new THREE.Fog(SKY, 40, 150);
+scene.background = scene.fog.color;                       // one colour object: underwater tint follows the fog
+const cam = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .1, 400);
+
+/* ---------- chunk meshing ---------- */
+const FACES = [
+  { d: [-1, 0, 0], c: [[0, 1, 0, 0, 1], [0, 0, 0, 0, 0], [0, 1, 1, 1, 1], [0, 0, 1, 1, 0]] },
+  { d: [1, 0, 0], c: [[1, 1, 1, 0, 1], [1, 0, 1, 0, 0], [1, 1, 0, 1, 1], [1, 0, 0, 1, 0]] },
+  { d: [0, -1, 0], c: [[1, 0, 1, 1, 0], [0, 0, 1, 0, 0], [1, 0, 0, 1, 1], [0, 0, 0, 0, 1]] },
+  { d: [0, 1, 0], c: [[0, 1, 1, 0, 0], [1, 1, 1, 1, 0], [0, 1, 0, 0, 1], [1, 1, 0, 1, 1]] },
+  { d: [0, 0, -1], c: [[1, 0, 0, 0, 0], [0, 0, 0, 1, 0], [1, 1, 0, 0, 1], [0, 1, 0, 1, 1]] },
+  { d: [0, 0, 1], c: [[0, 0, 1, 0, 0], [1, 0, 1, 1, 0], [0, 1, 1, 0, 1], [1, 1, 1, 1, 1]] },
+];
+const SHADE = [.72, .72, .5, 1, .86, .86];
+const matOpaque = new THREE.MeshBasicMaterial({ map: atlas, vertexColors: true, side: THREE.DoubleSide });
+const matLiquid = new THREE.MeshBasicMaterial({ map: atlas, vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: .72 });
+const meshes = [];
+
+function buildChunk(cx, cz) {
+  const key = cx + ',' + cz, old = meshes[key];
+  if (old) { scene.remove(old.o); old.o.geometry.dispose(); if (old.w) { scene.remove(old.w); old.w.geometry.dispose(); } }
+  const A = { p: [], u: [], c: [], i: [] }, L = { p: [], u: [], c: [], i: [] };
+  for (let z = cz * CS; z < cz * CS + CS; z++) for (let x = cx * CS; x < cx * CS + CS; x++) for (let y = 0; y < WY; y++) {
+    const v = get(x, y, z); if (!v) continue;
+    const liquid = v === 5 || v === 9, T = liquid ? L : A, B = BLOCKS[v];
+    for (let f = 0; f < 6; f++) {
+      const n = FACES[f].d, nx = x + n[0], ny = y + n[1], nz = z + n[2], nb = get(nx, ny, nz);
+      if (v === 5 ? nb !== 0 : (nb === v || (opaque(nb) && !liquid) || (!liquid && nb === 9))) continue;
+      const tile = f === 3 ? B[1] : f === 2 ? B[3] : B[2], tu = tile % 4, tv = 3 - ((tile / 4) | 0);
+      const sh = SHADE[f], nd = T.p.length / 3;
+      for (const [px, py, pz, uu, vv] of FACES[f].c) {
+        T.p.push(x + px, y + py, z + pz);
+        T.u.push((tu + .08 + uu * .84) / 4, (tv + .08 + vv * .84) / 4);   // inset a texel: no bleed between tiles
+        T.c.push(sh, sh, sh);
+      }
+      T.i.push(nd, nd + 1, nd + 2, nd + 2, nd + 1, nd + 3);
+    }
+  }
+  const mk = (T, m) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(T.p, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(T.u, 2));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(T.c, 3));
+    g.setIndex(T.i);
+    const me = new THREE.Mesh(g, m); me.frustumCulled = false; scene.add(me); return me;
+  };
+  const o = mk(A, matOpaque);
+  const w = L.p.length ? mk(L, matLiquid) : null;
+  meshes[key] = { o, w };
+}
+for (let cz = 0; cz < WZ / CS; cz++) for (let cx = 0; cx < WX / CS; cx++) buildChunk(cx, cz);
+
+/* clouds */
+const cloudTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = '#fff';
+  for (let i = 0; i < 26; i++) { const s = 5 + (hash2(i * 3, i * 7) * 9 | 0); g.fillRect(hash2(i, 99) * 60 | 0, hash2(99, i) * 60 | 0, s, s * .6 | 0); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); t.magFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return t;
+})();
+const clouds = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: .75, depthWrite: false, fog: false }));
+clouds.rotation.x = -Math.PI / 2; clouds.position.set(WX / 2, 42, WZ / 2); scene.add(clouds);
+
+const hl = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.001, 1.001, 1.001)), new THREE.LineBasicMaterial({ color: 0x000000 }));
+hl.visible = false; scene.add(hl);
+
+/* ---------- player ---------- */
+const HW = .3, PH = 1.8, EYE = 1.62, EPS = 1e-3;
+let sx = WX / 2 + .5, sy = height[(WZ / 2) * WX + WX / 2] + 1, sz = WZ / 2 + .5;   // spiral out to a clear grass column
+search: for (let r = 0; r < 40; r++) for (let a = 0; a < 24; a++) {
+  const x = Math.round(WX / 2 + Math.cos(a * Math.PI / 12) * r), z = Math.round(WZ / 2 + Math.sin(a * Math.PI / 12) * r);
+  const h = height[z * WX + x], top = get(x, h, z);
+  if (x < 2 || z < 2 || x > WX - 3 || z > WZ - 3 || h <= SEA + 1 || h >= 27) continue;
+  if (top !== 1 && top !== 4 && top !== 8) continue;                // ground, not a tree trunk
+  if (get(x, h + 1, z) || get(x, h + 2, z)) continue;               // headroom, no overhanging canopy
+  sx = x + .5; sy = h + 1; sz = z + .5; break search;
+}
+const p = { x: sx, y: sy, z: sz, vx: 0, vz: 0, vy: 0, yaw: .6, pitch: -.1, ground: false, fly: false };
+const keys = {}; let slot = 0;
+
+const collides = () => {
+  for (let x = Math.floor(p.x - HW); x <= Math.floor(p.x + HW); x++)
+    for (let y = Math.floor(p.y); y <= Math.floor(p.y + PH); y++)
+      for (let z = Math.floor(p.z - HW); z <= Math.floor(p.z + HW); z++) if (solid(get(x, y, z))) return true;
+  return false;
+};
+function moveY(d) {
+  const o = p.y;
+  p.y += d; if (!collides()) return;
+  if (d < 0) { p.y = Math.floor(p.y) + 1; p.ground = true; }
+  else if (d > 0) p.y = Math.floor(p.y + PH) - PH - EPS;
+  if (collides()) p.y = Math.floor(o) + 1;                     // buried deep: pop up a whole block
+  if (collides()) p.y = o;                                      // still stuck: hold position, never sink
+  p.vy = 0;
+}
+function moveXZ(a, d) {
+  if (!d) return; p[a] += d; if (!collides()) return;
+  const s = Math.sign(d);
+  p[a] = s > 0 ? Math.floor(p[a] + HW) - HW - EPS : Math.floor(p[a] - HW) + 1 + HW + EPS;
+}
+
+/* voxel DDA raycast -> {x,y,z,nx,ny,nz} */
+function raycast(ox, oy, oz, dx, dy, dz, max) {
+  let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
+  const st = [Math.sign(dx) || 1, Math.sign(dy) || 1, Math.sign(dz) || 1];
+  const dd = [Math.abs(1 / dx), Math.abs(1 / dy), Math.abs(1 / dz)];
+  const t = [st[0] > 0 ? (x + 1 - ox) * dd[0] : (x - ox) * dd[0], st[1] > 0 ? (y + 1 - oy) * dd[1] : (y - oy) * dd[1], st[2] > 0 ? (z + 1 - oz) * dd[2] : (z - oz) * dd[2]];
+  for (let i = 0; i < 128; i++) {
+    let a = t[0] < t[1] ? (t[0] < t[2] ? 0 : 2) : (t[1] < t[2] ? 1 : 2);
+    if (t[a] > max) return null;
+    t[a] += dd[a];
+    if (a === 0) x += st[0]; else if (a === 1) y += st[1]; else z += st[2];
+    if (solid(get(x, y, z))) return { x, y, z, nx: a === 0 ? -st[0] : 0, ny: a === 1 ? -st[1] : 0, nz: a === 2 ? -st[2] : 0 };
+  }
+  return null;
+}
+const dir = new THREE.Vector3();
+cam.getWorldDirection(dir);
+
+function edit(place) {
+  const h = raycast(p.x, p.y + EYE, p.z, dir.x, dir.y, dir.z, 6);
+  if (!h) return;
+  let x = h.x, y = h.y, z = h.z, v = 0;
+  if (place) {
+    y += h.ny; x += h.nx; z += h.nz; v = HOTBAR[slot];
+    if (x + 1 > p.x - HW && x < p.x + HW && y + 1 > p.y && y < p.y + PH && z + 1 > p.z - HW && z < p.z + HW) return;
+  } else if (y <= 0) return;                                // bedrock
+  if (get(x, y, z) === v) return;
+  const cx = Math.floor(x / CS), cz = Math.floor(z / CS);
+  set(x, y, z, v);
+  buildChunk(cx, cz);
+  const lx = x % CS, lz = z % CS;                            // rebuild seams
+  if (lx === 0) buildChunk(cx - 1, cz); if (lx === CS - 1) buildChunk(cx + 1, cz);
+  if (lz === 0) buildChunk(cx, cz - 1); if (lz === CS - 1) buildChunk(cx, cz + 1);
+}
+
+/* ---------- input ---------- */
+const $ = s => document.querySelector(s);
+const hot = $('#hot');
+HOTBAR.forEach((v, i) => hot.insertAdjacentHTML('beforeend', `<div class="slot${i === 0 ? ' on' : ''}"><b>${(i + 1) % 10}</b><i style="background:${BLOCKS[v][4]}"></i></div>`));
+const sel = () => { hot.querySelectorAll('.slot').forEach((e, i) => e.classList.toggle('on', i === slot)); $('#name').textContent = BLOCKS[HOTBAR[slot]][0]; };
+sel();
+
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyF') { p.fly = !p.fly; p.vy = 0; }
+  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5); if (n < HOTBAR.length) { slot = (n + 9) % 10; sel(); } }
+  if (e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('wheel', e => { if (playing) { slot = (slot + (e.deltaY > 0 ? 1 : 9)) % HOTBAR.length; sel(); } }, { passive: true });
+let playing = false;                                        // pointer lock is a bonus, not a requirement
+$('#start').onclick = () => {
+  playing = true; $('#start').classList.add('hide'); $('#cross').classList.remove('hide');
+  document.body.requestPointerLock?.()?.catch?.(() => {});   // can reject (headless, ESC cooldown)
+};
+addEventListener('mousedown', e => { if (playing) edit(e.button === 2); });
+addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('mousemove', e => {
+  if (!document.pointerLockElement) return;
+  p.yaw -= e.movementX * .0025; p.pitch -= e.movementY * .0025;
+  p.pitch = Math.max(-1.55, Math.min(1.55, p.pitch));
+});
+addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement) return;
+  playing = false; $('#start').classList.remove('hide'); $('#cross').classList.add('hide');
+});
+
+/* ---------- loop ---------- */
+let last = performance.now(), fps = 60;
+const help = $('#help');
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  fps += ((1 / Math.max(dt, 1e-4)) - fps) * .1;
+
+  const fwd = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), str = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const feet = get(Math.floor(p.x), Math.floor(p.y + .5), Math.floor(p.z)), eyes = get(Math.floor(p.x), Math.floor(p.y + EYE), Math.floor(p.z));
+  const swim = feet === 5 || eyes === 5;
+  const sprint = keys.ShiftLeft && !p.fly;
+  const spd = (p.fly ? 14 : swim ? 4 : 5.2) * (sprint ? 1.65 : 1);
+  const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
+  const tx = (str * cy - fwd * sy) * spd, tz = (-str * sy - fwd * cy) * spd;
+  const l = p.ground || p.fly ? 12 : swim ? 4 : 2;
+  p.vx += (tx - p.vx) * Math.min(1, l * dt); p.vz += (tz - p.vz) * Math.min(1, l * dt);
+
+  if (p.fly) p.vy += ((keys.Space ? 1 : 0) - (keys.ShiftLeft ? 1 : 0)) * 40 * dt, p.vy *= .92;
+  else if (swim) { p.vy += (keys.Space ? 26 : -18) * dt; p.vy = Math.max(-4, Math.min(4, p.vy)); }
+  else { p.vy -= 28 * dt; if (keys.Space && p.ground) { p.vy = 8.4; p.ground = false; } }
+  p.vy = Math.max(-50, p.vy);
+
+  p.ground = false;
+  moveXZ('x', p.vx * dt); moveXZ('z', p.vz * dt); moveY(p.vy * dt);
+  p.x = Math.max(HW + .05, Math.min(WX - HW - .05, p.x)); p.z = Math.max(HW + .05, Math.min(WZ - HW - .05, p.z));
+  if (p.y < -20) { p.y = 46; p.vy = 0; }
+
+  cam.position.set(p.x, p.y + EYE, p.z);
+  cam.rotation.set(0, 0, 0); cam.rotateY(p.yaw); cam.rotateX(p.pitch);
+  cam.getWorldDirection(dir);
+  if (eyes === 5) { scene.fog.color.setHex(WATER); scene.fog.near = 0; scene.fog.far = 22; }
+  else { scene.fog.color.setHex(SKY); scene.fog.near = 40; scene.fog.far = 150; }
+  const h = raycast(p.x, p.y + EYE, p.z, dir.x, dir.y, dir.z, 6);
+  hl.visible = !!h; if (h) hl.position.set(h.x + .5, h.y + .5, h.z + .5);
+  cloudTex.offset.x += dt * .0035;
+  help.textContent = `${fps | 0} fps  xyz ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}${p.fly ? '  [FLY]' : ''}${swim ? '  [SWIM]' : ''}`;
+  renderer.render(scene, cam);
+  requestAnimationFrame(frame);
+}
+window.mc = { p, get, set, edit, raycast, buildChunk, height, dir, cam };   // debug/test hook
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

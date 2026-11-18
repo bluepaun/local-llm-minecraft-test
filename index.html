@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local LLM Minecraft Lab — 마인크래프트 클론 플레이 목록</title>
+<meta name="description" content="로컬 LLM이 'make a minecraft clone as a single html' 하나의 프롬프트로 만든 마인크래프트 클론 모음. AMD Strix Halo 128GB + llama.cpp.">
+<style>
+  :root{--bg:#14161a;--panel:#1c1f25;--edge:#2b3038;--ink:#e8eaed;--dim:#9aa3ad;--acc:#6cc24a;--acc2:#4a9e2f;--warn:#e0a33c}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,"D2Coding","Courier New",monospace}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 72px}
+  header h1{margin:0 0 6px;font-size:26px;letter-spacing:.02em}
+  header h1 b{color:var(--acc)}
+  .prompt{display:inline-block;margin:10px 0 4px;padding:7px 12px;border:1px solid var(--edge);border-left:3px solid var(--acc);background:var(--panel);border-radius:4px;font-size:14px}
+  .prompt code{color:var(--acc)}
+  .hw{color:var(--dim);font-size:13px;margin:4px 0 0}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:22px 0 14px}
+  input#q{flex:1;min-width:220px;padding:10px 12px;background:var(--panel);border:1px solid var(--edge);border-radius:4px;color:var(--ink);font:inherit}
+  input#q:focus{outline:none;border-color:var(--acc)}
+  .cnt{color:var(--dim);font-size:13px;white-space:nowrap}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px}
+  .card{display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--panel);border:1px solid var(--edge);border-radius:6px;transition:.14s}
+  .card:hover{border-color:var(--acc);transform:translateY(-2px);box-shadow:0 6px 18px #0006}
+  .top{display:flex;align-items:baseline;gap:8px}
+  .num{font-size:12px;color:var(--bg);background:var(--acc);border-radius:3px;padding:2px 6px;font-weight:700}
+  .name{font-weight:700;font-size:15px;word-break:break-word}
+  .t{color:var(--dim);font-size:13px;word-break:break-word}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+  .tag{font-size:11px;padding:2px 7px;border:1px solid var(--edge);border-radius:999px;color:var(--dim)}
+  .tag.ok{color:var(--acc);border-color:#33502c}
+  .tag.warn{color:var(--warn);border-color:#5a4620}
+  .play{margin-top:8px;font-size:12px;color:var(--acc)}
+  section.note{margin-top:34px;color:var(--dim);font-size:13px}
+  section.note h2{font-size:14px;color:var(--ink);margin:0 0 8px}
+  section.note ul{margin:0;padding-left:18px}
+  .hint{margin-top:26px;padding:12px 14px;border:1px dashed var(--edge);border-radius:6px;color:var(--dim);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Local LLM <b>Minecraft</b> Lab</h1>
+  <div>로컬 LLM이 브라우저 게임 하나를 만들어냈는지 비교하는 실험실. 카드를 누르면 새 탭에서 바로 플레이됩니다.</div>
+  <div class="prompt">Prompt (단일) &rarr; <code>"make a minecraft clone as a single html"</code></div>
+  <p class="hw">HW: AMD Ryzen AI Max+ 395 “Strix Halo” (128 GB unified memory) · llama.cpp &nbsp;·&nbsp; <a href="https://github.com/bluepaun/local-llm-minecraft-test" style="color:var(--acc)">GitHub</a> &nbsp;·&nbsp; 원본 폴더는 수정하지 않고 복사만 했습니다.</p>
+</header>
+
+<div class="bar">
+  <input id="q" placeholder="filter — model / quant / title (예: qwen, gemma, q4, single)" autocomplete="off">
+  <span class="cnt" id="cnt"></span>
+</div>
+
+<main class="grid" id="grid"></main>
+
+<div class="hint">플레이 팁: 카드를 클릭하면 새 탭에 열립니다. 화면을 클릭하면 마우스가 잠기고(WASD 이동 / Space 점프 / 좌클릭 파괴 · 우클릭 설치 / 1-9 블록 선택), Esc로 잠금 해제됩니다. 일부 제목은 three.js를 CDN에서 받으니 첫 실행 시 네트워크가 필요합니다.</div>
+
+<section class="note">
+  <h2>이 목록에서 빠진 것</h2>
+  <ul>  <li><code>test009-Nemotron-Cascade-2-30B-Q6_K_L</code> — 빈 폴더 (출력 없음)</li>
+  <li><code>test011-Qwen3.5-397B-UD-IQ1_M-Coder</code> — 빈 폴더 (출력 없음)</li>
+  <li><code>test038-multi</code> — 마리오/히어로 아레나 등 다른 프롬프트 결과만 있음</li>
+  <li><code>test043-strata-iq4_xs</code> — 빈 폴더 (출력 없음)</li></ul>
+  <h2 style="margin-top:18px">동일 폴더의 미포함 변형</h2>
+  <ul>  <li>test010-Gemma-4-31B-Q8_K_KL/minecraft_game/index.html — style.css/game.js 참조가 깨져서 제외</li>
+  <li>test018-qwen3.6_Q8_K_XL+parallel-thinking/backup-fold|backup2|backup3 — 백업 사본, 메인본만 포함</li>
+  <li>test023-OD/index.html(838B 스텁), test023-OD/pi/minecraft2.html — 사본으로 제외</li>
+  <li>test034-deepseek/minecraft-clone-2d.html — 2D 변형(별도 후속 프롬프트)</li>
+  <li>test037-qwen3.8/index, index copy.html, flight/flight-sim.html — 중복/다른 프롬프트</li>
+  <li>test038-multi/*, test040의 gta|mario|fps, test041의 fps|mario, test026-pi-agent의 eye|tree|seasons|speed — 다른 프롬프트 결과</li></ul>
+</section>
+</div>
+
+<script>
+const G = [{"id": "001-nemotron-3-super-120b-ud-q4-k-xl", "num": "001", "orig": "test001-Nemotron-3-Super-120B-UD-Q4_K_XL", "path": "games/001-nemotron-3-super-120b-ud-q4-k-xl/index.html", "title": "Minecraft Clone with Three.js", "label": "Nemotron-3-Super-120B-UD-Q4_K_XL", "size": 1492, "date": "2026-11-18", "single": false, "cdn": true}, {"id": "002-gpt5.4", "num": "002", "orig": "test002-gpt5.4", "path": "games/002-gpt5.4/index.html", "title": "BlockCraft HTML", "label": "gpt5.4", "size": 2146, "date": "2026-11-18", "single": false, "cdn": false}, {"id": "003-omnicoder-2-9b-q8-0", "num": "003", "orig": "test003-OmniCoder-2-9B-Q8_0", "path": "games/003-omnicoder-2-9b-q8-0/index.html", "title": "Minecraft Clone", "label": "OmniCoder-2-9B-Q8_0", "size": 16006, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "004-qwen3-coder-next-ud-q4-k-kl", "num": "004", "orig": "test004-Qwen3-Coder_Next-UD-Q4_K_KL", "path": "games/004-qwen3-coder-next-ud-q4-k-kl/index.html", "title": "Minecraft HTML Game", "label": "Qwen3-Coder_Next-UD-Q4_K_KL", "size": 13870, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "005-qwen3-coder-next-ud-q8-k-xl", "num": "005", "orig": "test005-Qwen3-Coder-Next-UD-Q8_K_XL", "path": "games/005-qwen3-coder-next-ud-q8-k-xl/index.html", "title": "Minecraft in HTML", "label": "Qwen3-Coder-Next-UD-Q8_K_XL", "size": 14701, "date": "2026-11-18", "single": true, "cdn": false}, {"id": "006-qwen3.5-122b-a10b-ud-q4-k-kl", "num": "006", "orig": "test006-Qwen3.5-122B-A10B-UD-Q4_K_KL", "path": "games/006-qwen3.5-122b-a10b-ud-q4-k-kl/index.html", "title": "Minecraft HTML", "label": "Qwen3.5-122B-A10B-UD-Q4_K_KL", "size": 19676, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "007-qwen3.5-122b-a10b-ud-q4-k-kl-coder", "num": "007", "orig": "test007-Qwen3.5-122B-A10B-UD-Q4_K_KL-Coder", "path": "games/007-qwen3.5-122b-a10b-ud-q4-k-kl-coder/index.html", "title": "Minecraft HTML", "label": "Qwen3.5-122B-A10B-UD-Q4_K_KL-Coder", "size": 17971, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "008-qwen3.5-27b-ud-q8-k-xl", "num": "008", "orig": "test008-Qwen3.5-27B-UD-Q8_K_XL", "path": "games/008-qwen3.5-27b-ud-q8-k-xl/index.html", "title": "Minecraft HTML", "label": "Qwen3.5-27B-UD-Q8_K_XL", "size": 28860, "date": "2026-11-18", "single": true, "cdn": false}, {"id": "010-gemma-4-31b-q8-k-kl", "num": "010", "orig": "test010-Gemma-4-31B-Q8_K_KL", "path": "games/010-gemma-4-31b-q8-k-kl/index.html", "title": "HTML Minecraft Clone", "label": "Gemma-4-31B-Q8_K_KL", "size": 9306, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "012-minimax2.5-ud-q3-k-xl", "num": "012", "orig": "test012-MiniMax2.5-UD-Q3_K_XL", "path": "games/012-minimax2.5-ud-q3-k-xl/index.html", "title": "VoxelCraft", "label": "MiniMax2.5-UD-Q3_K_XL", "size": 32567, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "013-supergemma", "num": "013", "orig": "test013-supergemma", "path": "games/013-supergemma/index.html", "title": "Minecraft Clone", "label": "supergemma", "size": 601, "date": "2026-11-18", "single": false, "cdn": true}, {"id": "014-gemma-4-26b-a4b-q8-k-kl", "num": "014", "orig": "test014-Gemma-4-26B-A4B-Q8_K_KL", "path": "games/014-gemma-4-26b-a4b-q8-k-kl/index.html", "title": "HTML5 Minecraft Clone", "label": "Gemma-4-26B-A4B-Q8_K_KL", "size": 7207, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "015-qwen3.6-35b-bf16-coder", "num": "015", "orig": "test015-Qwen3.6-35B-BF16-Coder", "path": "games/015-qwen3.6-35b-bf16-coder/index.html", "title": "Minecraft Clone", "label": "Qwen3.6-35B-BF16-Coder", "size": 55865, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "016-qwen3.6-35b-q4-k-xl", "num": "016", "orig": "test016-Qwen3.6-35B-Q4_K_XL", "path": "games/016-qwen3.6-35b-q4-k-xl/index.html", "title": "Minecraft Clone", "label": "Qwen3.6-35B-Q4_K_XL", "size": 18858, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "017-qwen3.6-27b-q8-k-xl", "num": "017", "orig": "test017-Qwen3.6-27B-Q8_K_XL", "path": "games/017-qwen3.6-27b-q8-k-xl/index.html", "title": "Minecraft Clone", "label": "Qwen3.6-27B-Q8_K_XL", "size": 18780, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "018-qwen3.6-q8-k-xl-parallel-thinking", "num": "018", "orig": "test018-qwen3.6_Q8_K_XL+parallel-thinking", "path": "games/018-qwen3.6-q8-k-xl-parallel-thinking/index.html", "title": "MiniCraft", "label": "qwen3.6_Q8_K_XL+parallel-thinking", "size": 20123, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "019-minimax-m2.7-ud-iq4-xs", "num": "019", "orig": "test019-MiniMax-M2.7-UD-IQ4_XS", "path": "games/019-minimax-m2.7-ud-iq4-xs/index.html", "title": "Minecraft Clone", "label": "MiniMax-M2.7-UD-IQ4_XS", "size": 10093, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "020-20260506", "num": "020", "orig": "test020-20260506", "path": "games/020-20260506/index.html", "title": "VoxelCraft - Minecraft Clone", "label": "20260506", "size": 24854, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "021-20260507", "num": "021", "orig": "test021-20260507", "path": "games/021-20260507/index.html", "title": "Minecraft Clone", "label": "20260507", "size": 18332, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "022-od", "num": "022", "orig": "test022-OD", "path": "games/022-od/index.html", "title": "Minecraft Clone", "label": "OD", "size": 20980, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "023-od-pi", "num": "023", "orig": "test023-OD", "path": "games/023-od-pi/index.html", "title": "Minecraft Clone", "label": "OD · minecraft", "size": 24829, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "024-gemma", "num": "024", "orig": "test024-gemma", "path": "games/024-gemma/index.html", "title": "Mini Minecraft Clone", "label": "gemma", "size": 7455, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "025-minimax", "num": "025", "orig": "test025-minimax", "path": "games/025-minimax/index.html", "title": "VoxelCraft", "label": "minimax", "size": 19721, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "026-pi-agent-a", "num": "026", "orig": "test026-pi-agent", "path": "games/026-pi-agent-a/index.html", "title": "Qwen3.5-122b-Q5 Proxy - Minecraft Clone", "label": "pi-agent · qwen3.5-122b-q5-proxy", "size": 22229, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "026-pi-agent-b", "num": "026", "orig": "test026-pi-agent", "path": "games/026-pi-agent-b/index.html", "title": "Qwen3.6 Minecraft Clone", "label": "pi-agent · qwen3.6-bf16-proxy", "size": 36827, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "027-pi-qwen3.6-27b-mtp", "num": "027", "orig": "test027-pi-qwen3.6-27b-mtp", "path": "games/027-pi-qwen3.6-27b-mtp/index.html", "title": "Minecraft Clone", "label": "pi-qwen3.6-27b-mtp", "size": 32303, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "028-step-3.7-flash-iq4-xs", "num": "028", "orig": "test028-Step-3.7-Flash-IQ4_XS", "path": "games/028-step-3.7-flash-iq4-xs/index.html", "title": "Minecraft Clone", "label": "Step-3.7-Flash-IQ4_XS", "size": 34003, "date": "2026-11-18", "single": true, "cdn": false}, {"id": "029-step-3.7-flash-q4-k-s", "num": "029", "orig": "test029-Step-3.7-Flash-Q4_K_S", "path": "games/029-step-3.7-flash-q4-k-s/index.html", "title": "MiniCraft 3D", "label": "Step-3.7-Flash-Q4_K_S", "size": 18250, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "030-step-proxy", "num": "030", "orig": "test030-step-proxy", "path": "games/030-step-proxy/index.html", "title": "Minecraft Clone - Single File", "label": "step-proxy", "size": 21050, "date": "2026-11-18", "single": true, "cdn": false}, {"id": "031-gpt-fable", "num": "031", "orig": "test031-gpt-fable", "path": "games/031-gpt-fable/index.html", "title": "Minecraft Clone (single HTML file)", "label": "gpt-fable", "size": 5251, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "032-laguna", "num": "032", "orig": "test032-laguna", "path": "games/032-laguna/index.html", "title": "Simple Minecraft Clone", "label": "laguna", "size": 18501, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "033-deepseek", "num": "033", "orig": "test033-deepseek", "path": "games/033-deepseek/index.html", "title": "BlockCraft — a Minecraft clone", "label": "deepseek", "size": 26507, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "034-deepseek", "num": "034", "orig": "test034-deepseek", "path": "games/034-deepseek/index.html", "title": "Minecraft Clone", "label": "deepseek", "size": 25636, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "035-step", "num": "035", "orig": "test035-step", "path": "games/035-step/index.html", "title": "마인크래프트 클론", "label": "step", "size": 24530, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "036-deep", "num": "036", "orig": "test036-deep", "path": "games/036-deep/index.html", "title": "MiniCraft — a Minecraft clone in one HTML file", "label": "deep", "size": 27328, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "037-qwen3.8", "num": "037", "orig": "test037-qwen3.8", "path": "games/037-qwen3.8/index.html", "title": "VoxelCraft — tiny minecraft in one file", "label": "qwen3.8", "size": 38192, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "039-ornith", "num": "039", "orig": "test039-ornith", "path": "games/039-ornith/index.html", "title": "Minecraft Clone", "label": "ornith", "size": 18935, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "040-r9700-qwen38-q4", "num": "040", "orig": "test040-r9700-qwen38-q4", "path": "games/040-r9700-qwen38-q4/index.html", "title": "Voxel Craft — single-file Minecraft clone", "label": "r9700-qwen38-q4", "size": 34862, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "041-qwen3.8-next-flash", "num": "041", "orig": "test041-qwen3.8-next-flash", "path": "games/041-qwen3.8-next-flash/index.html", "title": "Minecraft — one file", "label": "qwen3.8-next-flash", "size": 19566, "date": "2026-11-18", "single": true, "cdn": true}, {"id": "042-strata-iq3-s", "num": "042", "orig": "test042-strata-iq3_s", "path": "games/042-strata-iq3-s/index.html", "title": "STRATA — voxel sandbox", "label": "strata-iq3_s", "size": 72904, "date": "2026-11-18", "single": true, "cdn": false}, {"id": "044-helogen", "num": "044", "orig": "test044-helogen", "path": "games/044-helogen/index.html", "title": "Voxelcraft — a Minecraft clone in one HTML file", "label": "helogen", "size": 58115, "date": "2026-11-18", "single": true, "cdn": true}];
+const grid = document.getElementById('grid'), q = document.getElementById('q'), cnt = document.getElementById('cnt');
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function render(f){
+  f=(f||'').toLowerCase();
+  const list = G.filter(g=>!f || (g.num+' '+g.label+' '+g.title+' '+(g.single?'single':'multi')+' '+(g.cdn?'three.js cdn':'inline')).toLowerCase().includes(f));
+  cnt.textContent = list.length + ' / ' + G.length + ' games';
+  grid.innerHTML = list.map(g=>`<a class="card" href="${g.path}" target="_blank" rel="noopener">
+    <div class="top"><span class="num">${g.num}</span><span class="name">${esc(g.label)}</span></div>
+    <div class="t">${esc(g.title)}</div>
+    <div class="meta">
+      <span class="tag ${g.single?'ok':''}">${g.single?'single file':'multi file'}</span>
+      ${g.cdn?'<span class="tag warn">three.js CDN</span>':'<span class="tag">no CDN</span>'}
+      <span class="tag">${(g.size/1024).toFixed(1)} KB</span>
+      <span class="tag">${g.date}</span>
+    </div>
+    <div class="play">▶ 새 탭에서 실행</div></a>`).join('');
+}
+q.addEventListener('input',e=>render(e.target.value));
+render('');
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+/* Additional styling for our Minecraft clone */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+h1 {
+    color: #2c3e50;
+    margin-bottom: 30px;
+}
+
+.info-panel {
+    background: #ecf0f1;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+.controls-panel {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    background: #bdc3c7;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px;
+    min-width: 200px;
+}
+
+.control-group h3 {
+    color: #2c3e50;
+    margin-top: 0;
+}
+
+#game-container {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 200px);
+    background: #87ceeb;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+#info, #controls {
+    position: fixed;
+    pointer-events: none;
+}
+
+#info {
+    top: 20px;
+    left: 20px;
+}
+
+#controls {
+    bottom: 20px;
+    left: 20px;
+}
+
+button {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #2980b9;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    #info, #controls {
+        padding: 8px;
+        font-size: 14px;
+    }
+    
+    #info {
+        top: 10px;
+        left: 10px;
+    }
+    
+    #controls {
+        bottom: 10px;
+        left: 10px;
+    }
+}

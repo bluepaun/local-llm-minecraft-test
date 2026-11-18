@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft HTML Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        #crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+        }
+        
+        #crosshair::after {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+        }
+        
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+        
+        #hotbar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .slot {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .slot.active {
+            border-color: #fff;
+            background: rgba(255, 255, 255, 0.4);
+        }
+        
+        #blocker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+        }
+        
+        #play-button {
+            padding: 20px 40px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        #play-button:hover {
+            background: #45a049;
+        }
+        
+        #debug {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    
+    <div id="instructions">
+        <h2>Minecraft HTML</h2>
+        <p><b>W, A, S, D</b> - Move</p>
+        <p><b>SPACE</b> - Jump</p>
+        <p><b>MOUSE</b> - Look around</p>
+        <p><b>CLICK</b> - Break/Place block</p>
+        <p><b>1-5</b> - Select block type</p>
+    </div>
+    
+    <div id="debug">
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Blocks: <span id="block-count">0</span></div>
+    </div>
+    
+    <div id="hotbar">
+        <div class="slot active" data-type="grass">1</div>
+        <div class="slot" data-type="dirt">2</div>
+        <div class="slot" data-type="stone">3</div>
+        <div class="slot" data-type="wood">4</div>
+        <div class="slot" data-type="bricks">5</div>
+    </div>
+    
+    <div id="blocker">
+        <button id="play-button">Click to Play</button>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let camera, scene, renderer;
+        let controls;
+        let raycaster;
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let canJump = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let prevTime = performance.now();
+        const objects = [];
+        let selectedBlockType = 'grass';
+        
+        const blockTypes = {
+            grass: { color: 0x5b8d28, name: 'Grass' },
+            dirt: { color: 0x6d4e34, name: 'Dirt' },
+            stone: { color: 0x888888, name: 'Stone' },
+            wood: { color: 0x8f563b, name: 'Wood' },
+            bricks: { color: 0xcc5a44, name: 'Bricks' }
+        };
+        
+        init();
+        animate();
+        
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 10, 750);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.y = 10;
+            
+            const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
+            light.position.set(0.5, 1, 0.75);
+            scene.add(light);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+            
+            controls = new THREE.PointerLockControls(camera, document.body);
+            
+            const blocker = document.getElementById('blocker');
+            const playButton = document.getElementById('play-button');
+            
+            playButton.addEventListener('click', function () {
+                controls.lock();
+            });
+            
+            controls.addEventListener('lock', function () {
+                blocker.style.display = 'none';
+            });
+            
+            controls.addEventListener('unlock', function () {
+                blocker.style.display = 'flex';
+            });
+            
+            scene.add(controls.getObject());
+            
+            const onKeyDown = function (event) {
+                switch (event.code) {
+                    case 'ArrowUp':
+                    case 'KeyW':
+                        moveForward = true;
+                        break;
+                    case 'ArrowLeft':
+                    case 'KeyA':
+                        moveLeft = true;
+                        break;
+                    case 'ArrowDown':
+                    case 'KeyS':
+                        moveBackward = true;
+                        break;
+                    case 'ArrowRight':
+                    case 'KeyD':
+                        moveRight = true;
+                        break;
+                    case 'Space':
+                        if (canJump === true) velocity.y += 350;
+                        canJump = false;
+                        break;
+                    case 'Digit1':
+                        selectBlock('grass', 0);
+                        break;
+                    case 'Digit2':
+                        selectBlock('dirt', 1);
+                        break;
+                    case 'Digit3':
+                        selectBlock('stone', 2);
+                        break;
+                    case 'Digit4':
+                        selectBlock('wood', 3);
+                        break;
+                    case 'Digit5':
+                        selectBlock('bricks', 4);
+                        break;
+                }
+            };
+            
+            const onKeyUp = function (event) {
+                switch (event.code) {
+                    case 'ArrowUp':
+                    case 'KeyW':
+                        moveForward = false;
+                        break;
+                    case 'ArrowLeft':
+                    case 'KeyA':
+                        moveLeft = false;
+                        break;
+                    case 'ArrowDown':
+                    case 'KeyS':
+                        moveBackward = false;
+                        break;
+                    case 'ArrowRight':
+                    case 'KeyD':
+                        moveRight = false;
+                        break;
+                }
+            };
+            
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            
+            document.addEventListener('mousedown', onMouseClick);
+            
+            raycaster = new THREE.Raycaster();
+            
+            const worldSize = 20;
+            const blockSize = 10;
+            
+            for (let x = -worldSize; x < worldSize; x++) {
+                for (let z = -worldSize; z < worldSize; z++) {
+                    createBlock(x * blockSize, 0, z * blockSize, 'grass');
+                    
+                    if (Math.random() > 0.9) {
+                        createBlock(x * blockSize, 10, z * blockSize, 'stone');
+                    }
+                }
+            }
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            
+            window.addEventListener('resize', onWindowResize);
+            
+            setupHotbar();
+        }
+        
+        function createBlock(x, y, z, type) {
+            const geometry = new THREE.BoxGeometry(10, 10, 10);
+            const material = new THREE.MeshLambertMaterial({ color: blockTypes[type].color });
+            const block = new THREE.Mesh(geometry, material);
+            block.position.set(x, y, z);
+            block.userData = { type: type };
+            scene.add(block);
+            objects.push(block);
+            updateBlockCount();
+        }
+        
+        function onMouseClick(event) {
+            if (!controls.isLocked) return;
+            
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(objects);
+            
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                
+                if (event.button === 0) {
+                    scene.remove(intersect.object);
+                    objects.splice(objects.indexOf(intersect.object), 1);
+                    updateBlockCount();
+                } else if (event.button === 2) {
+                    const pos = intersect.point.add(intersect.face.normal.multiplyScalar(5));
+                    const x = Math.round(pos.x / 10) * 10;
+                    const y = Math.round(pos.y / 10) * 10;
+                    const z = Math.round(pos.z / 10) * 10;
+                    
+                    createBlock(x, y, z, selectedBlockType);
+                }
+            }
+        }
+        
+        function selectBlock(type, slotIndex) {
+            selectedBlockType = type;
+            
+            document.querySelectorAll('.slot').forEach((slot, index) => {
+                if (index === slotIndex) {
+                    slot.classList.add('active');
+                } else {
+                    slot.classList.remove('active');
+                }
+            });
+        }
+        
+        function setupHotbar() {
+            document.querySelectorAll('.slot').forEach(slot => {
+                slot.addEventListener('click', function() {
+                    const type = this.getAttribute('data-type');
+                    const index = Array.from(document.querySelectorAll('.slot')).indexOf(this);
+                    selectBlock(type, index);
+                });
+            });
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        let frameCount = 0;
+        let lastFpsTime = 0;
+        
+        function updateBlockCount() {
+            document.getElementById('block-count').textContent = objects.length;
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+            
+            if (controls.isLocked === true) {
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= 9.8 * 100.0 * delta;
+                
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+                
+                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+                
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+                controls.getObject().position.y += (velocity.y * delta);
+                
+                if (controls.getObject().position.y < 10) {
+                    velocity.y = 0;
+                    controls.getObject().position.y = 10;
+                    canJump = true;
+                }
+            }
+            
+            prevTime = time;
+            
+            renderer.render(scene, camera);
+            
+            frameCount++;
+            if (time - lastFpsTime >= 1000) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                lastFpsTime = time;
+            }
+        }
+    </script>
+</body>
+</html>
