@@ -3,3 +3,6 @@
 .playwright-mcp/
 .opencode/
 .pi/
+
+# local-only rebuild scripts (reference the private experiment tree)
+tools/
