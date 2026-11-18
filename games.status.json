@@ -1,0 +1,248 @@
+[
+ {
+  "id": "001-nemotron-3-super-120b-ud-q4-k-xl",
+  "path": "games/001-nemotron-3-super-120b-ud-q4-k-xl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "002-gpt5.4",
+  "path": "games/002-gpt5.4/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "003-omnicoder-2-9b-q8-0",
+  "path": "games/003-omnicoder-2-9b-q8-0/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "004-qwen3-coder-next-ud-q4-k-kl",
+  "path": "games/004-qwen3-coder-next-ud-q4-k-kl/index.html",
+  "status": "broken",
+  "note": "Uncaught TypeError: THREE.PointerLockControls is not a constructor"
+ },
+ {
+  "id": "005-qwen3-coder-next-ud-q8-k-xl",
+  "path": "games/005-qwen3-coder-next-ud-q8-k-xl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "006-qwen3.5-122b-a10b-ud-q4-k-kl",
+  "path": "games/006-qwen3.5-122b-a10b-ud-q4-k-kl/index.html",
+  "status": "broken",
+  "note": "매 프레임 오류: Uncaught ReferenceError: Cannot access 'lastTime' before initialization"
+ },
+ {
+  "id": "007-qwen3.5-122b-a10b-ud-q4-k-kl-coder",
+  "path": "games/007-qwen3.5-122b-a10b-ud-q4-k-kl-coder/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "008-qwen3.5-27b-ud-q8-k-xl",
+  "path": "games/008-qwen3.5-27b-ud-q8-k-xl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "010-gemma-4-31b-q8-k-kl",
+  "path": "games/010-gemma-4-31b-q8-k-kl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "012-minimax2.5-ud-q3-k-xl",
+  "path": "games/012-minimax2.5-ud-q3-k-xl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "013-supergemma",
+  "path": "games/013-supergemma/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "014-gemma-4-26b-a4b-q8-k-kl",
+  "path": "games/014-gemma-4-26b-a4b-q8-k-kl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "015-qwen3.6-35b-bf16-coder",
+  "path": "games/015-qwen3.6-35b-bf16-coder/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "016-qwen3.6-35b-q4-k-xl",
+  "path": "games/016-qwen3.6-35b-q4-k-xl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "017-qwen3.6-27b-q8-k-xl",
+  "path": "games/017-qwen3.6-27b-q8-k-xl/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "018-qwen3.6-q8-k-xl-parallel-thinking",
+  "path": "games/018-qwen3.6-q8-k-xl-parallel-thinking/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "019-minimax-m2.7-ud-iq4-xs",
+  "path": "games/019-minimax-m2.7-ud-iq4-xs/index.html",
+  "status": "partial",
+  "note": "Uncaught TypeError: this.renderer.requestPointerLock is not a function"
+ },
+ {
+  "id": "020-20260506",
+  "path": "games/020-20260506/index.html",
+  "status": "broken",
+  "note": "Uncaught ReferenceError: ty is not defined"
+ },
+ {
+  "id": "021-20260507",
+  "path": "games/021-20260507/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "022-od",
+  "path": "games/022-od/index.html",
+  "status": "broken",
+  "note": "Uncaught TypeError: colors is not iterable"
+ },
+ {
+  "id": "023-od-pi",
+  "path": "games/023-od-pi/index.html",
+  "status": "broken",
+  "note": "Uncaught SyntaxError: Illegal break statement"
+ },
+ {
+  "id": "024-gemma",
+  "path": "games/024-gemma/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "025-minimax",
+  "path": "games/025-minimax/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "026-pi-agent-a",
+  "path": "games/026-pi-agent-a/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "026-pi-agent-b",
+  "path": "games/026-pi-agent-b/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "027-pi-qwen3.6-27b-mtp",
+  "path": "games/027-pi-qwen3.6-27b-mtp/index.html",
+  "status": "broken",
+  "note": "Uncaught ReferenceError: mergeBlockPositions is not defined"
+ },
+ {
+  "id": "028-step-3.7-flash-iq4-xs",
+  "path": "games/028-step-3.7-flash-iq4-xs/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "029-step-3.7-flash-q4-k-s",
+  "path": "games/029-step-3.7-flash-q4-k-s/index.html",
+  "status": "partial",
+  "note": "Uncaught ReferenceError: blockGeom is not defined"
+ },
+ {
+  "id": "030-step-proxy",
+  "path": "games/030-step-proxy/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "031-gpt-fable",
+  "path": "games/031-gpt-fable/index.html",
+  "status": "broken",
+  "note": "Uncaught TypeError: Failed to resolve module specifier \"three\". Relative references must start with either \"/\""
+ },
+ {
+  "id": "032-laguna",
+  "path": "games/032-laguna/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "033-deepseek",
+  "path": "games/033-deepseek/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "034-deepseek",
+  "path": "games/034-deepseek/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "035-step",
+  "path": "games/035-step/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "036-deep",
+  "path": "games/036-deep/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "037-qwen3.8",
+  "path": "games/037-qwen3.8/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "039-ornith",
+  "path": "games/039-ornith/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "040-r9700-qwen38-q4",
+  "path": "games/040-r9700-qwen38-q4/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "041-qwen3.8-next-flash",
+  "path": "games/041-qwen3.8-next-flash/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "042-strata-iq3-s",
+  "path": "games/042-strata-iq3-s/index.html",
+  "status": "ok",
+  "note": ""
+ },
+ {
+  "id": "044-helogen",
+  "path": "games/044-helogen/index.html",
+  "status": "ok",
+  "note": ""
+ }
+]
