@@ -58,12 +58,14 @@
 - ⛔ 실행 실패: 로드/실행 시 오류로 화면이 그려지지 않거나 루프가 돌지 않음 (원인 표기)
 - ⚠️ 부분 동작: 화면은 뜨지만 조작 시 오류 등 문제
 
-### 모델명 참고 (`gpt-fable` / `strata` / `helogen`)
+### 모델명 참고 (`gpt-fable` / `qwen3.8` / `strata` / `helogen`)
 
 `test041` · `test042` · `test044`는 전부 같은 모델 **[Qwen/Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next)**(125B MoE)이고, 뒤에 붙은 이름은 모델이 아니라 실행에 쓴 스택/엔진입니다.
 
 | 태그 | 정체 |
 |---|---|
 | `gpt-fable` (test031) | 진짜 GPT 계열이 아니라 **Qwen3.6-27B를 gpt-fable로 증류(distill)한 모델** |
+| `qwen3.8` (test037) | **Qwen3.8-27B · Q4** 퀀트 (Flash-Next가 아닌 27B) |
+| `r9700-qwen38-q4` (test040) | 같은 **Qwen3.8-27B · Q4**, `r9700`은 실행 장비 태그 |
 | `IQ3_S` (Strata) | [strata-nvfp4](https://github.com/sergqwer/strata-nvfp4) 서빙 스택(전문가 가중치를 RAM에 올리는 NVFP4 계열)로 띄운 **IQ3_S** 퀀트 |
 | `Halogen` | [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) — AMD Strix Halo(gfx1151/ROCm) 최적화 로컬 추론 엔진. `.hgn` 4-bit 웨이트 ([peonist-ai/halogen-qwen3.8-flash-next](https://huggingface.co/peonist-ai/halogen-qwen3.8-flash-next)) |
