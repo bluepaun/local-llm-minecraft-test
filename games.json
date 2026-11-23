@@ -449,5 +449,16 @@
   "date": "2026-11-18",
   "single": true,
   "cdn": true
+ },
+ {
+  "id": "045-inkling-2-mini-sq-20",
+  "num": "045",
+  "path": "games/045-inkling-2-mini-sq-20/index.html",
+  "title": "VoxelCraft — Minecraft Clone",
+  "label": "inkling-2-mini-sq-20",
+  "size": 15777,
+  "date": "2026-11-23",
+  "single": true,
+  "cdn": true
  }
 ]

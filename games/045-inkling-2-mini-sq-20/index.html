@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoxelCraft — Minecraft Clone</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#87ceeb; font-family:'Courier New',monospace; }
+  #game { position:fixed; inset:0; }
+  canvas { display:block; }
+  #crosshair {
+    position:fixed; left:50%; top:50%; width:22px; height:22px;
+    transform:translate(-50%,-50%); pointer-events:none; z-index:10;
+  }
+  #crosshair::before, #crosshair::after {
+    content:''; position:absolute; background:#fff; mix-blend-mode:difference;
+  }
+  #crosshair::before { left:50%; top:0; width:2px; height:100%; transform:translateX(-50%); }
+  #crosshair::after { top:50%; left:0; height:2px; width:100%; transform:translateY(-50%); }
+  #hud {
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    display:flex; gap:6px; z-index:10; pointer-events:none;
+  }
+  .slot {
+    width:56px; height:56px; border:3px solid #3a3a3a; border-radius:6px;
+    background:rgba(0,0,0,.45); display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#fff; font-size:10px; text-align:center; line-height:1.2;
+  }
+  .slot.active { border-color:#fff; box-shadow:0 0 12px rgba(255,255,255,.6); }
+  .swatch { width:26px; height:26px; border-radius:4px; border:2px solid rgba(255,255,255,.35); margin-bottom:3px; }
+  #overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; text-align:center;
+  }
+  #overlay h1 { font-size:52px; letter-spacing:4px; text-shadow:4px 4px 0 #000; margin-bottom:10px; }
+  #overlay p { font-size:16px; opacity:.9; margin:6px 0; }
+  #overlay .keys { margin-top:18px; font-size:13px; opacity:.75; line-height:1.9; }
+  #startBtn {
+    margin-top:26px; padding:14px 42px; font-size:20px; font-family:inherit; font-weight:bold;
+    background:#4caf50; color:#fff; border:none; border-radius:8px; cursor:pointer; letter-spacing:2px;
+    box-shadow:0 6px 0 #2e7d32;
+  }
+  #startBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #2e7d32; }
+  #hint {
+    position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:10;
+    color:#fff; background:rgba(0,0,0,.45); padding:6px 16px; border-radius:20px; font-size:13px;
+    pointer-events:none; transition:opacity .4s;
+  }
+  #fps { position:fixed; top:12px; right:14px; color:#fff; background:rgba(0,0,0,.4); padding:4px 10px; border-radius:6px; font-size:12px; z-index:10; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="crosshair"></div>
+<div id="hint">Click to play — WASD move · Space jump · Left-click break · Right-click place</div>
+<div id="fps">60 FPS</div>
+<div id="hud"></div>
+<div id="overlay">
+  <h1>⛏ VOXELCRAFT</h1>
+  <p>A tiny Minecraft clone in one HTML file</p>
+  <div class="keys">
+    W A S D — move &nbsp;·&nbsp; Mouse — look &nbsp;·&nbsp; Space — jump<br>
+    Left click — break block &nbsp;·&nbsp; Right click — place block<br>
+    1–6 — select block &nbsp;·&nbsp; Esc — pause
+  </div>
+  <button id="startBtn">PLAY</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+// ---------- Config ----------
+const WORLD_SIZE = 48;          // blocks per side
+const WORLD_HEIGHT = 24;
+const BLOCK = 1;
+const GRAVITY = 22;
+const JUMP_V = 8.2;
+const MOVE_SPEED = 5.2;
+const REACH = 6;
+
+// Block types: id -> {name, color, topColor?}
+const BLOCKS = {
+  0: null,
+  1: { name:'Grass',  color:0x5a9e3f, top:0x6fbf4a },
+  2: { name:'Dirt',   color:0x7a5230 },
+  3: { name:'Stone',  color:0x7d7d7d },
+  4: { name:'Wood',   color:0x8a5a2b },
+  5: { name:'Leaves', color:0x2f7a2f },
+  6: { name:'Sand',   color:0xd9c27a },
+  7: { name:'Brick',  color:0x9c4a3c },
+};
+const HOTBAR = [1,2,3,4,5,6];
+
+// ---------- World gen ----------
+function hash(x,y,z){
+  let h = Math.sin(x*127.1 + y*311.7 + z*74.7) * 43758.5453;
+  return h - Math.floor(h);
+}
+function noise2(x,z){
+  const xi=Math.floor(x), zi=Math.floor(z), xf=x-xi, zf=z-zi;
+  const s=(a,b)=>hash(a,0,b);
+  const u=xf*xf*(3-2*xf), v=zf*zf*(3-2*zf);
+  const a=s(xi,zi), b=s(xi+1,zi), c=s(xi,zi+1), d=s(xi+1,zi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+}
+function fbm(x,z){
+  return noise2(x,z)*0.6 + noise2(x*2.1,z*2.1)*0.3 + noise2(x*4.3,z*4.3)*0.1;
+}
+
+const world = new Uint8Array(WORLD_SIZE*WORLD_SIZE*WORLD_HEIGHT);
+const idx = (x,y,z)=> (y*WORLD_SIZE + z)*WORLD_SIZE + x;
+const inBounds = (x,y,z)=> x>=0 && x<WORLD_SIZE && y>=0 && y<WORLD_HEIGHT && z>=0 && z<WORLD_SIZE;
+
+function genWorld(){
+  for(let x=0;x<WORLD_SIZE;x++){
+    for(let z=0;z<WORLD_SIZE;z++){
+      const h = Math.floor(6 + fbm(x*0.09, z*0.09)*9);
+      for(let y=0;y<WORLD_HEIGHT;y++){
+        let id = 0;
+        if(y < h-3) id = 3;                 // stone
+        else if(y < h) id = 2;              // dirt
+        if(y === h-1) id = 1;               // grass top
+        if(y === h-1 && h < 7) id = 6;      // sand near water level
+        if(y === h-1 && h >= 7 && h < 8) id = 6;
+        world[idx(x,y,z)] = id;
+      }
+      // trees
+      if(hash(x,7,z) > 0.93 && h >= 7){
+        const trunkH = 3 + Math.floor(hash(x,8,z)*3);
+        for(let t=1;t<=trunkH;t++){
+          const ty = h + t;
+          if(ty < WORLD_HEIGHT) world[idx(x,ty,z)] = 4;
+        }
+        const top = h + trunkH;
+        for(let dx=-2;dx<=2;dx++) for(let dz=-2;dz<=2;dz++) for(let dy=-1;dy<=1;dy++){
+          const lx=x+dx, lz=z+dz, ly=top+dy;
+          if(inBounds(lx,ly,lz) && Math.abs(dx)+Math.abs(dz)+Math.abs(dy) <= 3){
+            if(world[idx(lx,ly,lz)]===0) world[idx(lx,ly,lz)] = 5;
+          }
+        }
+      }
+    }
+  }
+}
+
+// ---------- Three.js setup ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 30, 90);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById('game').appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x5a7a4a, 0.9);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff2d8, 1.1);
+sun.position.set(30, 50, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+sun.shadow.camera.far = 120;
+scene.add(sun);
+scene.add(sun.target);
+
+// ---------- Meshes ----------
+const blockGeo = new THREE.BoxGeometry(1,1,1);
+const materials = {};
+for(const id in BLOCKS){
+  const b = BLOCKS[id];
+  if(!b) continue;
+  const top = new THREE.MeshLambertMaterial({ color: b.top || b.color });
+  const side = new THREE.MeshLambertMaterial({ color: b.color });
+  const bottom = new THREE.MeshLambertMaterial({ color: b.color });
+  materials[id] = [side, side, top, bottom, side, side];
+}
+
+const meshGroup = new THREE.Group();
+scene.add(meshGroup);
+const blockMeshes = new Map(); // key -> mesh
+
+function key(x,y,z){ return x+','+y+','+z; }
+
+function addBlockMesh(x,y,z,id){
+  const m = new THREE.Mesh(blockGeo, materials[id]);
+  m.position.set(x+0.5, y+0.5, z+0.5);
+  m.castShadow = true; m.receiveShadow = true;
+  m.userData = {x,y,z,id};
+  meshGroup.add(m);
+  blockMeshes.set(key(x,y,z), m);
+}
+function removeBlockMesh(x,y,z){
+  const m = blockMeshes.get(key(x,y,z));
+  if(m){ meshGroup.remove(m); blockMeshes.delete(key(x,y,z)); }
+}
+
+function rebuildMeshes(){
+  // clear
+  for(const m of blockMeshes.values()) meshGroup.remove(m);
+  blockMeshes.clear();
+  for(let x=0;x<WORLD_SIZE;x++) for(let y=0;y<WORLD_HEIGHT;y++) for(let z=0;z<WORLD_SIZE;z++){
+    const id = world[idx(x,y,z)];
+    if(id) addBlockMesh(x,y,z,id);
+  }
+}
+
+// ---------- Player ----------
+const player = {
+  pos: new THREE.Vector3(WORLD_SIZE/2, 30, WORLD_SIZE/2),
+  vel: new THREE.Vector3(),
+  yaw: 0, pitch: 0,
+  onGround: false,
+  radius: 0.35, height: 1.8,
+};
+
+// ---------- Input ----------
+const keys = {};
+let selected = 1;
+let locked = false;
+
+addEventListener('keydown', e=>{
+  keys[e.code] = true;
+  if(e.code.startsWith('Digit')){
+    const n = parseInt(e.code.slice(5));
+    if(n>=1 && n<=HOTBAR.length) selected = HOTBAR[n-1];
+  }
+});
+addEventListener('keyup', e=> keys[e.code] = false);
+
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+const hint = document.getElementById('hint');
+
+startBtn.addEventListener('click', ()=>{
+  overlay.style.display = 'none';
+  renderer.domElement.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', ()=>{
+  locked = document.pointerLockElement === renderer.domElement;
+  if(!locked){
+    overlay.style.display = 'flex';
+    overlay.querySelector('h1').textContent = '⏸ PAUSED';
+    overlay.querySelector('p').textContent = 'Click to resume';
+    startBtn.textContent = 'RESUME';
+  } else {
+    overlay.style.display = 'none';
+    hint.style.opacity = '1';
+    setTimeout(()=> hint.style.opacity = '0', 4000);
+  }
+});
+
+document.addEventListener('mousemove', e=>{
+  if(!locked) return;
+  player.yaw -= e.movementX * 0.0023;
+  player.pitch -= e.movementY * 0.0023;
+  player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
+});
+
+// ---------- Raycast for block interaction ----------
+const raycaster = new THREE.Raycaster();
+raycaster.far = REACH;
+
+function pickBlock(){
+  raycaster.setFromCamera({x:0,y:0}, camera);
+  const meshes = [...blockMeshes.values()];
+  const hits = raycaster.intersectObjects(meshes, false);
+  if(hits.length){
+    const hit = hits[0];
+    const m = hit.object;
+    const n = hit.face.normal.clone();
+    // transform normal to world (mesh not rotated, so fine)
+    const bx = m.userData.x, by = m.userData.y, bz = m.userData.z;
+    return {
+      block: {x:bx,y:by,z:bz},
+      place: {x:bx+Math.round(n.x), y:by+Math.round(n.y), z:bz+Math.round(n.z)}
+    };
+  }
+  return null;
+}
+
+function breakBlock(){
+  const p = pickBlock();
+  if(!p) return;
+  const {x,y,z} = p.block;
+  if(!inBounds(x,y,z)) return;
+  world[idx(x,y,z)] = 0;
+  removeBlockMesh(x,y,z);
+}
+function placeBlock(){
+  const p = pickBlock();
+  if(!p) return;
+  const {x,y,z} = p.place;
+  if(!inBounds(x,y,z)) return;
+  if(world[idx(x,y,z)] !== 0) return;
+  // don't place inside player
+  const px = player.pos.x, py = player.pos.y, pz = player.pos.z;
+  if(x+0.5 > px-0.4 && x+0.5 < px+0.4 && z+0.5 > pz-0.4 && z+0.5 < pz+0.4 && y+0.5 > py-1.7 && y+0.5 < py+0.2) return;
+  world[idx(x,y,z)] = selected;
+  addBlockMesh(x,y,z,selected);
+}
+
+renderer.domElement.addEventListener('mousedown', e=>{
+  if(!locked) return;
+  if(e.button === 0) breakBlock();
+  else if(e.button === 2) placeBlock();
+});
+renderer.domElement.addEventListener('contextmenu', e=> e.preventDefault());
+
+// ---------- HUD ----------
+const hud = document.getElementById('hud');
+function buildHUD(){
+  hud.innerHTML = '';
+  HOTBAR.forEach((id,i)=>{
+    const b = BLOCKS[id];
+    const div = document.createElement('div');
+    div.className = 'slot' + (id===selected ? ' active' : '');
+    div.innerHTML = `<div class="swatch" style="background:#${(b.top||b.color).toString(16).padStart(6,'0')}"></div><span>${i+1} ${b.name}</span>`;
+    hud.appendChild(div);
+  });
+}
+
+// ---------- Physics ----------
+function collide(pos, vel){
+  // simple AABB vs voxel grid
+  const r = player.radius;
+  const h = player.height;
+  // X axis
+  let nx = pos.x + vel.x;
+  if(checkAABB(nx, pos.y, pos.z, r, h)) nx = pos.x;
+  pos.x = nx;
+  // Z axis
+  let nz = pos.z + vel.z;
+  if(checkAABB(pos.x, pos.y, nz, r, h)) nz = pos.z;
+  pos.z = nz;
+  // Y axis
+  let ny = pos.y + vel.y;
+  player.onGround = false;
+  if(checkAABB(pos.x, ny, pos.z, r, h)){
+    if(vel.y < 0){
+      // land
+      const feet = ny - h;
+      const top = Math.floor(feet) + 1;
+      ny = top + h;
+      player.onGround = true;
+    }
+    vel.y = 0;
+  }
+  pos.y = ny;
+}
+function checkAABB(px, py, pz, r, h){
+  const minX = Math.floor(px - r), maxX = Math.floor(px + r);
+  const minY = Math.floor(py - h), maxY = Math.floor(py);
+  const minZ = Math.floor(pz - r), maxZ = Math.floor(pz + r);
+  for(let x=minX;x<=maxX;x++) for(let y=minY;y<=maxY;y++) for(let z=minZ;z<=maxZ;z++){
+    if(!inBounds(x,y,z)){
+      if(y<0) return true; // floor
+      continue;
+    }
+    if(world[idx(x,y,z)] !== 0) return true;
+  }
+  return false;
+}
+
+// ---------- Main loop ----------
+const clock = new THREE.Clock();
+let fpsFrames = 0, fpsTime = 0;
+const fpsEl = document.getElementById('fps');
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if(locked){
+    // movement
+    const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    const move = new THREE.Vector3();
+    if(keys['KeyW']) move.add(forward);
+    if(keys['KeyS']) move.sub(forward);
+    if(keys['KeyD']) move.add(right);
+    if(keys['KeyA']) move.sub(right);
+    if(move.lengthSq() > 0) move.normalize().multiplyScalar(MOVE_SPEED);
+
+    player.vel.x = move.x;
+    player.vel.z = move.z;
+
+    if(keys['Space'] && player.onGround){
+      player.vel.y = JUMP_V;
+      player.onGround = false;
+    }
+    player.vel.y -= GRAVITY * dt;
+
+    const prevVel = player.vel.clone();
+    collide(player.pos, prevVel);
+    player.vel.y = prevVel.y;
+
+    // world bounds
+    player.pos.x = Math.max(0.5, Math.min(WORLD_SIZE-0.5, player.pos.x));
+    player.pos.z = Math.max(0.5, Math.min(WORLD_SIZE-0.5, player.pos.z));
+    if(player.pos.y < -10){ player.pos.set(WORLD_SIZE/2, 30, WORLD_SIZE/2); player.vel.set(0,0,0); }
+
+    // camera
+    camera.position.set(player.pos.x, player.pos.y, player.pos.z);
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
+  }
+
+  // sun follows player
+  sun.position.set(player.pos.x + 30, player.pos.y + 40, player.pos.z + 20);
+  sun.target.position.set(player.pos.x, player.pos.y, player.pos.z);
+
+  renderer.render(scene, camera);
+
+  fpsFrames++; fpsTime += dt;
+  if(fpsTime >= 0.5){
+    fpsEl.textContent = Math.round(fpsFrames/fpsTime) + ' FPS';
+    fpsFrames = 0; fpsTime = 0;
+  }
+}
+
+// ---------- Init ----------
+genWorld();
+rebuildMeshes();
+buildHUD();
+
+// find spawn: highest grass near center
+let spawnY = 30;
+for(let y=WORLD_HEIGHT-1;y>=0;y--){
+  if(world[idx(Math.floor(WORLD_SIZE/2), y, Math.floor(WORLD_SIZE/2))] !== 0){
+    spawnY = y + 2; break;
+  }
+}
+player.pos.set(WORLD_SIZE/2, spawnY, WORLD_SIZE/2);
+camera.position.copy(player.pos);
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// rebuild HUD active state each frame (cheap)
+setInterval(()=>{
+  const slots = hud.querySelectorAll('.slot');
+  HOTBAR.forEach((id,i)=>{
+    if(slots[i]) slots[i].classList.toggle('active', id===selected);
+  });
+}, 100);
+
+// test hook: ?autostart hides overlay and renders scene without pointer lock
+const AUTO = location.search.includes('autostart');
+if(AUTO){
+  overlay.style.display = 'none';
+  locked = true;
+  hint.style.opacity = '0';
+}
+let autoFrames = 0;
+const _animate = animate;
+function animate(){
+  if(AUTO && autoFrames >= 30){ renderer.render(scene, camera); return; }
+  autoFrames++;
+  _animate();
+}
+animate();
+})();
+</script>
+</body>
+</html>

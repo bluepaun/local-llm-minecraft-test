@@ -244,5 +244,11 @@
   "path": "games/044-helogen/index.html",
   "status": "ok",
   "note": ""
+ },
+ {
+  "id": "045-inkling-2-mini-sq-20",
+  "path": "games/045-inkling-2-mini-sq-20/index.html",
+  "status": "broken",
+  "note": "매 프레임 오류: Uncaught RangeError: Maximum call stack size exceeded"
  }
 ]

@@ -53,6 +53,7 @@
 | 041 | `041-qwen3.8-next-flash` | single | ✅ 실행 확인 | 19.1 KB |
 | 042 | `042-strata-iq3-s` | single | ✅ 실행 확인 | 71.2 KB |
 | 044 | `044-helogen` | single | ✅ 실행 확인 | 56.8 KB |
+| 045 | `045-inkling-2-mini-sq-20` | single | ⛔ 실행 실패 — 매 프레임 오류: Uncaught RangeError: Maximum call stack size exceeded | 15.4 KB |
 
 - ✅ 실행 확인: canvas가 생성되고 렌더 루프(rAF/timer)가 도는 것을 확인
 - ⛔ 실행 실패: 로드/실행 시 오류로 화면이 그려지지 않거나 루프가 돌지 않음 (원인 표기)
